@@ -203,6 +203,26 @@ test('focusing a sibling dims an unrelated person but not the sibling\'s own spo
   expect(screen.getByText('Rohan').closest('.patch')).toHaveClass('dimmed')
 })
 
+test('focus mode auto-expands a collapsed flap that lives on the spouse side of a unit', () => {
+  // Ravi (the spouse side of the anna/ravi ancestor unit, not the anchor)
+  // has his own parent and sibling. Focusing RaviParent — Ravi's own
+  // ancestor, rendered one row further up — must auto-expand *Ravi's* flap
+  // (not Anna's) to reveal RaviSibling, proving the auto-expand loop checks
+  // unit.spouseId's siblings independently of unit.personId's.
+  const extendedPeople = [...people, person('ravi_parent', 'RaviParent'), person('ravi_sibling', 'RaviSibling')]
+  const extendedRelationships: Relationship[] = [
+    ...relationships,
+    { id: 'r8', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi' },
+    { id: 'r9', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi_sibling' },
+  ]
+  render(<TreeView people={extendedPeople} relationships={extendedRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  expect(screen.queryByText('RaviSibling')).not.toBeInTheDocument()
+  fireEvent.doubleClick(screen.getByText('RaviParent').closest('.patch')!)
+
+  expect(screen.getByText('RaviSibling')).toBeInTheDocument()
+  expect(screen.getByText('RaviSibling').closest('.patch')).toHaveClass('in-focus')
+})
+
 test('the Focus Mode toggle makes a single click focus a person instead of opening their profile', () => {
   const onOpenProfile = vi.fn()
   render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} />)

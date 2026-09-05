@@ -8,6 +8,17 @@ import { CollapseToggle } from './CollapseToggle'
 
 const NEUTRAL_STATE: PersonVisualState = { inFocus: false, dimmed: false }
 
+function focusSetFor(personId: string, relationships: Relationship[]): Set<string> {
+  const family = computeImmediateFamily(personId, relationships)
+  return new Set([
+    personId,
+    ...family.parents,
+    ...(family.spouse ? [family.spouse] : []),
+    ...family.children,
+    ...family.siblings,
+  ])
+}
+
 interface TreeViewProps {
   people: Person[]
   relationships: Relationship[]
@@ -93,16 +104,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   const rows = buildAncestorRows(focalId, relationships)
   const focalChildren = getDescendantIds(focalId, relationships).filter((id) => byId.has(id))
 
-  const focusedFamily = focusedId ? computeImmediateFamily(focusedId, relationships) : null
-  const focusedSet = focusedId && focusedFamily
-    ? new Set([
-        focusedId,
-        ...focusedFamily.parents,
-        ...(focusedFamily.spouse ? [focusedFamily.spouse] : []),
-        ...focusedFamily.children,
-        ...focusedFamily.siblings,
-      ])
-    : null
+  const focusedSet = focusedId ? focusSetFor(focusedId, relationships) : null
 
   function toggleFlap(personId: string) {
     setOpenFlaps((prev) => {
@@ -119,14 +121,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   // against the full computed focus set (not just family.siblings) covers
   // that case as well as the sibling-focused case.
   function focusOn(personId: string) {
-    const family = computeImmediateFamily(personId, relationships)
-    const newFocusSet = new Set([
-      personId,
-      ...family.parents,
-      ...(family.spouse ? [family.spouse] : []),
-      ...family.children,
-      ...family.siblings,
-    ])
+    const newFocusSet = focusSetFor(personId, relationships)
     setOpenFlaps((prev) => {
       const next = new Set(prev)
       for (const row of rows) {
