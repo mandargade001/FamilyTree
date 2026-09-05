@@ -1,3 +1,9 @@
+# NOTE: this file is currently unused for local dev — Docker/Supabase CLI (`supabase start`) is
+# blocked by this sandbox's container policy (see Task 2 in the plan), so local tests run against
+# a native Postgres install instead (see supabase/tests/db.js and supabase/.env.example). Kept
+# only because `supabase link`/`supabase db push` against a real hosted project (Task 22) may
+# still use it.
+#
 # For detailed configuration reference documentation, visit:
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the

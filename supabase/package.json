@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --env-file=.env --test"
+    "test": "node --env-file-if-exists=.env --test"
   },
   "dependencies": {
     "pg": "^8.13.0"
