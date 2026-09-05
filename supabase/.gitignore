@@ -2,6 +2,9 @@
 .branches
 .temp
 
+# Node
+node_modules
+
 # dotenvx
 .env.keys
 .env.local
