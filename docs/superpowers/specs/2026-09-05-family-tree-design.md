@@ -9,82 +9,84 @@ Build a visual, digital family tree starting from the highest known ancestor, so
 - Starting from scratch — no existing spreadsheet, GEDCOM, or notes to import.
 - Expected scale: 200+ people, unknown number of generations back.
 - Editors: the whole extended family, assumed non-technical. They must use a point-and-click form — never a raw file or code.
-- Sharing/viewing: local only for now (same-network access is enough); the design should not preclude hosting it for full remote/internet access later.
-- No accounts/auth in this draft — anyone with the link can view and edit.
+- Sharing/viewing: hosted for real, at no cost — GitHub Pages (frontend) + Supabase (data/photos), so the whole family can reach it over the internet from day one, not just on a local network.
+- Because the site is publicly hosted, viewing is open to anyone with the link, but **editing is gated by a shared family passphrase** (see Editing Flow) — no individual accounts.
 
 ## Approach
 
-A custom local full-stack web app: a React tree-view frontend, a small Express API, and JSON-file + local-photo-folder storage. Rejected alternatives:
-- **Static file, no backend** — fails the "non-technical relatives fill out a form" requirement, since there'd be no server to persist form submissions to.
+A statically-hosted React app (GitHub Pages) that talks directly to Supabase (Postgres database + file storage) instead of a custom server. Rejected alternatives:
+- **Local Express server + JSON files** (original draft) — works, but requires a machine to be left running and reachable, and doesn't satisfy "accessible by everyone" as directly as free, always-on hosting does.
+- **Static file, no backend at all** — fails the "non-technical relatives fill out a form" requirement, since nothing would persist form submissions.
 - **Gramps / Gramps Web** — mature and fast to stand up, but hands over visual/UX control to an existing tool's design, when tailored "smooth clean visuals" was a stated goal.
 
 ## Architecture
 
 ```
 FamilyTree/
-├── server/              # Node + Express API
-│   ├── index.js         # starts server, serves API + built frontend
-│   ├── routes/
-│   │   ├── people.js     # CRUD for person profiles
-│   │   └── relationships.js
-│   ├── data/
-│   │   ├── people.json
-│   │   └── relationships.json
-│   └── photos/          # uploaded image files, saved by person id
-├── client/              # React + Vite SPA
+├── client/                  # React + Vite SPA, deployed to GitHub Pages
 │   ├── src/
-│   │   ├── components/  # TreeView, PersonForm, PersonCard, PersonProfile
-│   │   └── api/         # fetch wrappers to the Express API
+│   │   ├── components/      # TreeView, PersonForm, PersonCard, PersonProfile, PassphraseGate
+│   │   └── api/             # supabase-js client wrappers
+│   └── .github/workflows/   # GitHub Action: build + deploy to Pages on push
+├── supabase/
+│   ├── migrations/          # SQL: table schema, RLS policies, RPC functions
+│   └── functions/           # Edge Function: gated photo upload
 └── docs/superpowers/specs/...
 ```
 
-Express serves both the API and the built React app as one process. Running it binds to the machine's LAN IP, so any relative on the same Wi-Fi opens `http://<host-ip>:PORT` in their browser and gets the same live app. No database server to install — backup is just copying `server/data/` and `server/photos/`. This structure carries over unchanged to a future real deployment (e.g. Render/Railway) for internet-wide sharing — that would add persistent disk config and auth, not a rewrite.
+- **Hosting**: GitHub Pages serves the built static frontend (free, a GitHub Action redeploys it on every push to `main`). Supabase's free tier provides the Postgres database, file storage, and the serverless functions used for gated writes.
+- **No server to run or keep alive** — the frontend talks straight to Supabase's API from the browser, so there's no local process to leave running and no separate "local vs. hosted" mode; it's the same live app for everyone from the start.
+- Backup = a scheduled Supabase database export (or manual export from its dashboard) — replaces copying local JSON/photo folders.
 
 ## Data Model
 
-Each person is a standalone profile record. Relationships are stored separately so a person can have multiple parents/spouses/children without duplicating their profile data.
+Two Postgres tables in Supabase. Relationships are stored separately from people so a person can have multiple parents/spouses/children without duplicating their profile data.
 
-```json
-// server/data/people.json
-{
-  "id": "p_001",
-  "firstName": "Anna",
-  "lastName": "Gade",
-  "gender": "F",
-  "birthDate": "1932-04-12",
-  "deathDate": null,
-  "birthPlace": "Pune, India",
-  "occupation": "Teacher",
-  "bio": "Free-text life story / anecdotes...",
-  "photos": ["photo_p001_1.jpg", "photo_p001_2.jpg"],
-  "createdAt": "...",
-  "updatedAt": "..."
-}
+```sql
+create table people (
+  id            uuid primary key default gen_random_uuid(),
+  first_name    text not null,
+  last_name     text,
+  gender        text,
+  birth_date    text,   -- loose text: "1932-04-12", "1932", "circa 1900s", "unknown"
+  death_date    text,
+  birth_place   text,
+  occupation    text,
+  bio           text,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+
+create table relationships (
+  id        uuid primary key default gen_random_uuid(),
+  type      text check (type in ('parent-child', 'spouse')),
+  from_id   uuid references people(id) on delete cascade,
+  to_id     uuid references people(id) on delete cascade
+);
 ```
 
-```json
-// server/data/relationships.json
-{ "id": "r_001", "type": "parent-child", "from": "p_001", "to": "p_002" }
-{ "id": "r_002", "type": "spouse", "from": "p_001", "to": "p_003" }
-```
+Photos are stored in a Supabase Storage bucket (`photos/`), one folder per person id; a person's `photos` are looked up by listing that folder rather than a column on `people` (keeps uploads independent of profile edits).
 
-- Every field except `id` and `firstName` is optional. A person with just a name and a single parent-child link is a valid, useful node — most profiles will start incomplete and fill in gradually.
-- Only two relationship types (`parent-child`, `spouse`) are stored; siblings, grandparents, etc. are derived from these at render time, not stored redundantly.
-- Dates are stored as loosely-validated text (`"1932"`, `"circa 1900s"`, `"unknown"`, or a full ISO date) to accommodate fuzzy genealogical knowledge — a full date, when given, is validated as a real calendar date.
-- Photos are named by person id on disk, so orphan-file cleanup is straightforward.
+- Every column except `id` and `first_name` is nullable. A person with just a name and a single parent-child link is a valid, useful node — most profiles will start incomplete and fill in gradually.
+- Only two relationship types are stored (enforced by the `check` constraint); siblings, grandparents, etc. are derived from these at render/query time, not stored redundantly.
+- Dates stay as loosely-validated text rather than a SQL `date` type, to accommodate fuzzy genealogical knowledge (a full date, when given, is still checked as a real calendar date before saving).
+- `on delete cascade` on relationships means deleting a person automatically removes their relationship rows — paired with a client-side confirmation step (see Editing Flow) so this is never a silent surprise.
 
 ## Editing Flow
 
-- **Add Person**: a floating "+ Add Person" button opens a modal form (name, dates, place, occupation, bio, photo upload). Only first name is required. Saves via `POST /api/people`.
-- **Link a relationship**: from a person's profile, "Add Parent" / "Add Spouse" / "Add Child" buttons open a picker that can search existing people or create a new person inline — so relatives never leave the flow to add someone who doesn't exist yet. Saves via `POST /api/relationships`.
-- **Edit Person**: clicking a node opens their full profile (photo gallery, bio, dates); "Edit" reuses the same form, pre-filled. Saves via `PATCH /api/people/:id`.
-- **Delete**: requires confirmation and warns how many relationships will be removed with the person — no silent orphaning of the tree.
-- **Concurrency**: simple read-modify-write per request on the JSON files. This is adequate at family scale/edit frequency; it is not designed for high-concurrency multi-writer use.
-- No login/accounts in this draft, consistent with "local only for now."
+- **Viewing** is fully open — anyone with the link can browse the tree, no gate.
+- **Passphrase gate**: the first time someone tries to add/edit/delete anything, a small prompt asks for the shared family passphrase. On success it's remembered in the browser (`localStorage`) so they aren't asked again on that device. There are no individual accounts — everyone who knows the passphrase edits as themselves, unattributed.
+- Under the hood, all writes go through Postgres RPC functions (`add_person`, `update_person`, `delete_person`, `add_relationship`, `delete_relationship`) that take the passphrase as a parameter and verify it (against a hashed value stored server-side) before touching any data. Row-Level Security on the tables denies direct inserts/updates/deletes from the browser entirely — every write must go through one of these checked functions. Reads (`select`) stay open via RLS, matching "viewing is public."
+- **Add Person**: a floating "+ Add Person" button opens a modal form (name, dates, place, occupation, bio, photo upload). Only first name is required. Calls `add_person(passphrase, ...fields)`.
+- **Link a relationship**: from a person's profile, "Add Parent" / "Add Spouse" / "Add Child" buttons open a picker that can search existing people or create a new person inline — so relatives never leave the flow to add someone who doesn't exist yet. Calls `add_relationship(passphrase, type, from_id, to_id)`.
+- **Edit Person**: clicking a node opens their full profile (photo gallery, bio, dates); "Edit" reuses the same form, pre-filled. Calls `update_person(passphrase, id, ...fields)`.
+- **Photo upload**: routed through a Supabase Edge Function that checks the passphrase, then writes to the Storage bucket using elevated privileges — keeping the same gate consistent for photos and data.
+- **Delete**: requires confirmation and warns how many relationships will be removed with the person (queried beforehand) — no silent orphaning of the tree.
+- **Concurrency**: Postgres handles concurrent writes natively; this is well within what the free tier handles at family scale/edit frequency.
 
 ## Tree Visualization
 
-- Classic top-down layout: oldest known generation at the top, descendants branching downward. Computed client-side from `people.json` + `relationships.json` on load, so the rendered tree is always in sync with current data (never stored as a separate structure).
+- Classic top-down layout: oldest known generation at the top, descendants branching downward. Computed client-side from the `people` + `relationships` tables on load (fetched via `supabase-js`), so the rendered tree is always in sync with current data (never stored as a separate structure).
 - **Collapsible branches**: nodes with children show an expand/collapse toggle. The tree opens showing the top 1–2 generations by default; branches are drilled into on click — keeps a 200+-person tree from rendering as a wall of boxes.
 - Each node is a compact card: photo thumbnail, name, birth–death years. Clicking opens the full profile in a side panel/modal without losing tree position.
 - Spouses render side-by-side at the same generation level, connected down to their shared children.
@@ -92,20 +94,21 @@ Each person is a standalone profile record. Relationships are stored separately 
 
 ## Error Handling & Data Integrity
 
-- Server rejects a person record with no first name, and rejects any relationship referencing a non-existent person id.
-- Cycle guard on `parent-child` edges prevents a relationship that would make someone their own ancestor.
-- Photo uploads are size-limited (10MB/file) and type-checked (jpg/png/heic) before being written to disk.
-- A `npm run backup` script zips `server/data/` and `server/photos/` with a timestamp, for cheap insurance before bulk edits.
+- `people.first_name` is `not null`; `relationships.from_id`/`to_id` are foreign keys, so both constraints are enforced by Postgres itself, not just application code.
+- Cycle guard on `parent-child` edges (preventing a relationship that would make someone their own ancestor) is implemented inside the `add_relationship` RPC function, run before the insert.
+- Photo uploads are size-limited (10MB/file) and type-checked (jpg/png/heic) inside the Edge Function before being written to Storage.
+- Wrong passphrase → the RPC function raises an error the frontend surfaces as "incorrect passphrase," and no data is touched.
+- Backup: a scheduled Supabase database export (built into their dashboard/CLI) plus the Storage bucket, on a periodic cadence — replaces the local zip-script approach from the original draft.
 
 ## Testing
 
-- **Backend**: unit tests for the API routes — create/edit/delete person, add relationship, cycle guard, orphan-relationship rejection — run against an in-memory/temp JSON file so tests never touch real data.
+- **Database**: tests for the RPC functions (correct passphrase required, cycle guard rejects an ancestor-loop, orphan-relationship rejected by the foreign key, wrong passphrase makes no change) run against a local/test Supabase project so tests never touch real family data.
 - **Frontend**: component tests for the person form (required/optional field validation) and a smoke test that the tree renders correctly from a small fixture dataset (parent/child/spouse nesting as expected).
-- **Manual verification**: after implementation, run the dev server and add a handful of test people/relationships through the actual UI to confirm the end-to-end flow (add → link → view in tree → edit → collapse/expand) works, before considering the feature done.
+- **Manual verification**: after implementation, use the deployed (or locally-run) app to add a handful of test people/relationships through the actual UI — including entering the passphrase and confirming a wrong passphrase is rejected — to confirm the end-to-end flow (add → link → view in tree → edit → collapse/expand) works, before considering the feature done.
 
 ## Out of Scope (this draft)
 
-- Authentication/accounts, and remote/internet hosting (structure supports it later, but not built now).
+- Individual accounts/attribution (who edited what) — the passphrase gate is shared, not per-person.
 - GEDCOM import/export.
 - Source citations/document attachments beyond photos (flagged as a possible future addition, not built now).
-- SQLite/database migration (JSON files are sufficient at current scale; noted as an upgrade path if needed).
+- Rotating/changing the shared passphrase after launch (would need a documented manual process, not built now).
