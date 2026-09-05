@@ -22,6 +22,39 @@ test('anon cannot insert into people directly (RLS blocks it)', async () => {
   }
 })
 
+test('anon cannot select from app_config directly (RLS + revoked grants block it)', async () => {
+  await pool.query('set role anon')
+  try {
+    const { error } = await supabase.from('app_config').select('*').limit(1)
+    assert.ok(error, 'expected an error but select succeeded')
+    assert.match(
+      error.message,
+      /permission denied|row-level security/i,
+      `expected the select to be blocked, but got: ${error.message}`
+    )
+  } finally {
+    await pool.query('reset role')
+  }
+})
+
+test('anon cannot update app_config directly (passphrase hash cannot be overwritten)', async () => {
+  await pool.query('set role anon')
+  let caught = null
+  try {
+    await pool.query("update app_config set value = 'hacked' where key = 'passphrase_hash'")
+  } catch (err) {
+    caught = err
+  } finally {
+    await pool.query('reset role')
+  }
+  assert.ok(caught, 'expected update to be rejected, but it succeeded')
+  assert.match(
+    caught.message,
+    /permission denied|row-level security/i,
+    `expected the update to be blocked, but got: ${caught.message}`
+  )
+})
+
 test('verify_passphrase rejects the wrong passphrase', async () => {
   const { data, error } = await supabase.rpc('verify_passphrase', { p_passphrase: 'definitely-wrong' })
   assert.equal(error, null)
@@ -152,6 +185,21 @@ test('add_relationship links a parent to a child', async () => {
   })
   assert.equal(error, null)
   assert.ok(data)
+})
+
+test('add_relationship rejects a duplicate edge (same type/from/to)', async () => {
+  const { data: parentId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Dupe Parent' })
+  const { data: childId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Dupe Child' })
+
+  const first = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId,
+  })
+  assert.equal(first.error, null)
+
+  const second = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId,
+  })
+  assert.ok(second.error, 'expected the duplicate edge to be rejected')
 })
 
 test('add_relationship rejects a relationship that would make someone their own ancestor', async () => {
