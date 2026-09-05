@@ -1,4 +1,4 @@
-import { getParentIds, getChildIds, getSpouseIds, getSiblingIds, computeImmediateFamily, buildAncestorRows } from './familyGraph'
+import { getParentIds, getChildIds, getSpouseIds, getSiblingIds, computeImmediateFamily, buildAncestorRows, getDescendantIds } from './familyGraph'
 import type { Relationship } from '../types'
 
 // Anna & Ravi are Meera, Sanjay, and Deepak's parents. Sanjay married Priya.
@@ -86,4 +86,9 @@ test('buildAncestorRows handles someone with only one recorded parent', () => {
   const rows = buildAncestorRows('solo-child', oneParent)
   const depth1 = rows.find((r) => r.depth === 1)!
   expect(depth1.units).toEqual([{ personId: 'solo-parent', spouseId: null }])
+})
+
+test('getDescendantIds returns only direct children, not grandchildren', () => {
+  expect(getDescendantIds('meera', relationships)).toEqual(['rohan'])
+  expect(getDescendantIds('rohan', relationships)).toEqual([])
 })

@@ -12,6 +12,10 @@ export function getChildIds(personId: string, relationships: Relationship[]): st
     .map((r) => r.to_id)
 }
 
+export function getDescendantIds(personId: string, relationships: Relationship[]): string[] {
+  return getChildIds(personId, relationships)
+}
+
 export function getSpouseIds(personId: string, relationships: Relationship[]): string[] {
   return relationships
     .filter((r) => r.type === 'spouse' && (r.from_id === personId || r.to_id === personId))

@@ -33,3 +33,16 @@ textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
 .seam-parent-child { width: 2px; height: 26px; background-image: linear-gradient(var(--border-strong) 60%, transparent 0%); background-size: 2px 8px; background-repeat: repeat-y; }
 .seam-spouse { width: 20px; height: 2px; background-image: linear-gradient(90deg, var(--thread) 60%, transparent 0%); background-size: 8px 2px; background-repeat: repeat-x; }
 .seam.dimmed { opacity: .2; }
+
+.flap { display: flex; align-items: center; gap: 6px; background: var(--patch); border: 1.5px dashed var(--border-strong); border-radius: var(--radius-pill); height: 28px; padding: 0 12px; font-size: 11px; font-weight: 600; color: var(--thread); cursor: pointer; }
+.flap:hover { border-color: var(--thread); }
+.flap .icon { transition: transform .3s cubic-bezier(.16,1,.3,1); }
+.flap.open .icon { transform: rotate(180deg); }
+.add-parent-slot { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100px; padding: 8px 4px; border: 1.5px dashed var(--border); border-radius: var(--radius-sm); color: var(--muted); font-size: 9.5px; font-weight: 600; text-align: center; cursor: pointer; margin-bottom: var(--space-md); }
+.add-parent-slot:hover { color: var(--thread); border-color: var(--thread); }
+.gen { display: flex; gap: var(--space-xxl); justify-content: center; align-items: flex-start; }
+.gen-column { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); }
+.couple { display: flex; align-items: center; position: relative; }
+.tree { display: flex; flex-direction: column-reverse; align-items: center; gap: var(--space-sm); overflow-x: auto; padding: var(--space-sm); }
+.descendants { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); margin-top: var(--space-lg); }
+.collapse-dot { width: 17px; height: 17px; border-radius: 50%; background: var(--thread-soft); border: 1.5px solid var(--thread); color: var(--thread-ink); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 11px; line-height: 1; padding: 0; }
