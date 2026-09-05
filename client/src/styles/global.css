@@ -61,3 +61,7 @@ textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
 .gate-input { height: 40px; margin: 18px 0; text-align: center; letter-spacing: .3em; }
 .gate-error { color: var(--stitch-new); font-size: 12px; margin-bottom: 12px; }
 .gate-cancel { display: block; margin: 10px auto 0; background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; }
+
+.modal-shell { max-width: 460px; margin: 0 auto; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
