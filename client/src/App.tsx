@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Person, PersonFields, Relationship, RelationshipType } from './types'
-import { fetchPeople, addPerson, updatePerson, deletePerson } from './api/people'
+import { fetchPeople, addPerson, updatePerson } from './api/people'
 import { fetchRelationships, addRelationship } from './api/relationships'
 import { getPassphrase } from './lib/passphrase'
 import { TreeView } from './components/tree/TreeView'
@@ -14,6 +14,7 @@ type Panel =
   | { kind: 'profile'; personId: string }
   | { kind: 'form'; editingId: string | null }
   | { kind: 'picker'; anchorId: string }
+  | { kind: 'creating' }
   | { kind: 'gate'; onUnlocked: () => void }
 
 export default function App() {
@@ -122,7 +123,10 @@ export default function App() {
           onCancel={() => setPanel({ kind: 'profile', personId: panel.anchorId })}
           onCreateNew={(type, searchText) => {
             const anchorId = panel.anchorId
-            setPanel({ kind: 'form', editingId: null })
+            // Don't render an interactive form during the async round trip — that
+            // would let the user submit or cancel a second, conflicting action
+            // (e.g. creating a duplicate person) before this one finishes.
+            setPanel({ kind: 'creating' })
             void (async () => {
               try {
                 const newId = await addPerson({ first_name: searchText, last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null })
@@ -134,6 +138,12 @@ export default function App() {
             })()
           }}
         />
+      )}
+
+      {panel.kind === 'creating' && (
+        <div className="modal-shell" aria-live="polite">
+          <div className="profile-name" style={{ fontSize: 19, marginBottom: 18 }}>Creating person…</div>
+        </div>
       )}
 
       {panel.kind === 'gate' && (
