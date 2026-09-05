@@ -10,21 +10,21 @@ const anchor = person('meera', 'Meera')
 const people = [anchor, person('deepak', 'Deepak'), person('priya', 'Priya')]
 
 test('filters the result list as the search text changes', () => {
-  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} />)
+  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={() => {}} />)
   fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Dee' } })
   expect(screen.getByText('Deepak')).toBeInTheDocument()
   expect(screen.queryByText('Priya')).not.toBeInTheDocument()
 })
 
 test('never shows the anchor person as a result', () => {
-  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} />)
+  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={() => {}} />)
   fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Meera' } })
   expect(screen.queryByText('Meera')).not.toBeInTheDocument()
 })
 
 test('clicking a result calls onLinkExisting with the selected relationship type', () => {
   const onLinkExisting = vi.fn()
-  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={onLinkExisting} onCreateNew={() => {}} />)
+  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={onLinkExisting} onCreateNew={() => {}} onCancel={() => {}} />)
   fireEvent.click(screen.getByText('Spouse'))
   fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Priya' } })
   fireEvent.click(screen.getByText('Priya'))
@@ -32,7 +32,14 @@ test('clicking a result calls onLinkExisting with the selected relationship type
 })
 
 test('shows a create-new row with the current search text', () => {
-  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} />)
+  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={() => {}} />)
   fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Kiran' } })
   expect(screen.getByText('Create new person "Kiran"')).toBeInTheDocument()
+})
+
+test('clicking Cancel calls onCancel', () => {
+  const onCancel = vi.fn()
+  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={onCancel} />)
+  fireEvent.click(screen.getByText('Cancel'))
+  expect(onCancel).toHaveBeenCalled()
 })

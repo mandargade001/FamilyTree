@@ -119,6 +119,7 @@ export default function App() {
           anchorPerson={people.find((p) => p.id === panel.anchorId)!}
           people={people}
           onLinkExisting={(type, personId) => handleLinkExisting(panel.anchorId, type, personId)}
+          onCancel={() => setPanel({ kind: 'profile', personId: panel.anchorId })}
           onCreateNew={(type, searchText) => {
             const anchorId = panel.anchorId
             setPanel({ kind: 'form', editingId: null })

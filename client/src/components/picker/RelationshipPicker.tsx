@@ -1,18 +1,20 @@
 import { useState } from 'react'
 import type { Person, RelationshipType } from '../../types'
 import { Icon } from '../shared/Icon'
+import { Button } from '../shared/Button'
 
 interface RelationshipPickerProps {
   anchorPerson: Person
   people: Person[]
   onLinkExisting: (type: RelationshipType, personId: string) => void
   onCreateNew: (type: RelationshipType, searchText: string) => void
+  onCancel: () => void
 }
 
 const TYPES: RelationshipType[] = ['parent-child', 'spouse']
 const LABELS: Record<RelationshipType, string> = { 'parent-child': 'Parent', spouse: 'Spouse' }
 
-export function RelationshipPicker({ anchorPerson, people, onLinkExisting, onCreateNew }: RelationshipPickerProps) {
+export function RelationshipPicker({ anchorPerson, people, onLinkExisting, onCreateNew, onCancel }: RelationshipPickerProps) {
   const [type, setType] = useState<RelationshipType>('parent-child')
   const [search, setSearch] = useState('')
 
@@ -54,6 +56,10 @@ export function RelationshipPicker({ anchorPerson, people, onLinkExisting, onCre
           Create new person "{search}"
         </div>
       )}
+
+      <div className="form-actions">
+        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+      </div>
     </div>
   )
 }
