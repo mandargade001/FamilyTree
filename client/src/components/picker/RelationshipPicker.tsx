@@ -1,0 +1,59 @@
+import { useState } from 'react'
+import type { Person, RelationshipType } from '../../types'
+import { Icon } from '../shared/Icon'
+
+interface RelationshipPickerProps {
+  anchorPerson: Person
+  people: Person[]
+  onLinkExisting: (type: RelationshipType, personId: string) => void
+  onCreateNew: (type: RelationshipType, searchText: string) => void
+}
+
+const TYPES: RelationshipType[] = ['parent-child', 'spouse']
+const LABELS: Record<RelationshipType, string> = { 'parent-child': 'Parent', spouse: 'Spouse' }
+
+export function RelationshipPicker({ anchorPerson, people, onLinkExisting, onCreateNew }: RelationshipPickerProps) {
+  const [type, setType] = useState<RelationshipType>('parent-child')
+  const [search, setSearch] = useState('')
+
+  const results = people.filter(
+    (p) => p.id !== anchorPerson.id && p.first_name.toLowerCase().includes(search.toLowerCase()) && search.length > 0,
+  )
+
+  return (
+    <div className="picker-shell">
+      <div className="profile-name" style={{ fontSize: 18, marginBottom: 2 }}>
+        Add relationship to {anchorPerson.first_name}
+      </div>
+      <p className="callout" style={{ marginBottom: 16 }}>Choose the relationship type, then find or create the person.</p>
+
+      <div className="rel-type-row">
+        {TYPES.map((t) => (
+          <div key={t} className={['rel-type', type === t ? 'selected' : ''].filter(Boolean).join(' ')} onClick={() => setType(t)}>
+            {LABELS[t]}
+          </div>
+        ))}
+      </div>
+
+      <input className="field" placeholder="Search existing people…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ marginBottom: 12 }} />
+
+      {results.length > 0 && (
+        <div className="result-list">
+          {results.map((p) => (
+            <div className="result-row" key={p.id} onClick={() => onLinkExisting(type, p.id)}>
+              <div className="result-avatar"><Icon name="photo" size={14} /></div>
+              <div>{p.first_name}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {search.length > 0 && (
+        <div className="create-new-row" onClick={() => onCreateNew(type, search)}>
+          <Icon name="plus" size={14} />
+          Create new person "{search}"
+        </div>
+      )}
+    </div>
+  )
+}
