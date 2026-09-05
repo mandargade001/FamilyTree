@@ -17,7 +17,9 @@ export function PersonForm({ initial, onSave, onCancel }: PersonFormProps) {
   const [fields, setFields] = useState<PersonFields>(initial ?? EMPTY)
 
   function set<K extends keyof PersonFields>(key: K, value: string) {
-    setFields((prev) => ({ ...prev, [key]: value === '' ? null : value }))
+    // first_name must never be null (it's required), always keep it as string
+    const finalValue = key === 'first_name' ? value : (value === '' ? null : value)
+    setFields((prev) => ({ ...prev, [key]: finalValue }))
   }
 
   const canSave = fields.first_name.trim().length > 0

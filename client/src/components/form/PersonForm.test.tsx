@@ -26,4 +26,18 @@ describe('PersonForm', () => {
     expect(screen.getByDisplayValue('Meera')).toBeInTheDocument()
     expect(screen.getByDisplayValue('1955')).toBeInTheDocument()
   })
+
+  it('disables Save when first name is cleared after being entered (no crash)', () => {
+    render(<PersonForm initial={null} onSave={() => {}} onCancel={() => {}} />)
+    const firstNameInput = screen.getByLabelText(/First name/)
+    const saveButton = screen.getByText('Save')
+
+    // Enable Save by typing a name
+    fireEvent.change(firstNameInput, { target: { value: 'Anna' } })
+    expect(saveButton).not.toBeDisabled()
+
+    // Disable Save by clearing the name (must not crash)
+    fireEvent.change(firstNameInput, { target: { value: '' } })
+    expect(saveButton).toBeDisabled()
+  })
 })
