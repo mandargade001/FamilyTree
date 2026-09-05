@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { PersonProfile } from './PersonProfile'
 import type { Person, Relationship } from '../../types'
 
@@ -13,22 +13,38 @@ const relationships: Relationship[] = [
   { id: 'r2', type: 'parent-child', from_id: 'meera', to_id: 'rohan' },
 ]
 
+function noop() {}
+function baseProps(overrides: Partial<Parameters<typeof PersonProfile>[0]> = {}) {
+  return {
+    person: meera,
+    people,
+    relationships,
+    onEdit: noop,
+    onAddRelationship: noop,
+    onOpenPerson: noop,
+    onCenterHere: noop,
+    onDelete: noop,
+    onUploadPhoto: async () => ({ ok: true as const }),
+    ...overrides,
+  }
+}
+
 test('renders name and available meta fields, omitting blank ones', () => {
-  render(<PersonProfile person={meera} people={people} relationships={relationships} onEdit={() => {}} onAddRelationship={() => {}} onOpenPerson={() => {}} />)
+  render(<PersonProfile {...baseProps()} />)
   expect(screen.getByText('Meera Gade')).toBeInTheDocument()
   expect(screen.getByText(/Pune, India/)).toBeInTheDocument()
   expect(screen.getByText(/Teacher/)).toBeInTheDocument()
 })
 
 test('lists relationship chips by role', () => {
-  render(<PersonProfile person={meera} people={people} relationships={relationships} onEdit={() => {}} onAddRelationship={() => {}} onOpenPerson={() => {}} />)
+  render(<PersonProfile {...baseProps()} />)
   expect(screen.getByText('Parent · Anna')).toBeInTheDocument()
   expect(screen.getByText('Child · Rohan')).toBeInTheDocument()
 })
 
 test('clicking a relationship chip opens that person', () => {
   const onOpenPerson = vi.fn()
-  render(<PersonProfile person={meera} people={people} relationships={relationships} onEdit={() => {}} onAddRelationship={() => {}} onOpenPerson={onOpenPerson} />)
+  render(<PersonProfile {...baseProps({ onOpenPerson })} />)
   fireEvent.click(screen.getByText('Parent · Anna'))
   expect(onOpenPerson).toHaveBeenCalledWith('anna')
 })
@@ -36,9 +52,54 @@ test('clicking a relationship chip opens that person', () => {
 test('Edit Profile and Add relationship fire their callbacks', () => {
   const onEdit = vi.fn()
   const onAddRelationship = vi.fn()
-  render(<PersonProfile person={meera} people={people} relationships={relationships} onEdit={onEdit} onAddRelationship={onAddRelationship} onOpenPerson={() => {}} />)
+  render(<PersonProfile {...baseProps({ onEdit, onAddRelationship })} />)
   fireEvent.click(screen.getByText('Edit Profile'))
   fireEvent.click(screen.getByText('Add relationship'))
   expect(onEdit).toHaveBeenCalledOnce()
   expect(onAddRelationship).toHaveBeenCalledOnce()
+})
+
+test('Center tree here calls onCenterHere', () => {
+  const onCenterHere = vi.fn()
+  render(<PersonProfile {...baseProps({ onCenterHere })} />)
+  fireEvent.click(screen.getByText('Center tree here'))
+  expect(onCenterHere).toHaveBeenCalledOnce()
+})
+
+test('Delete asks for confirmation showing the relationship count, and calls onDelete when confirmed', () => {
+  const onDelete = vi.fn()
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  render(<PersonProfile {...baseProps({ onDelete })} />)
+  fireEvent.click(screen.getByText('Delete'))
+  expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('2 relationships'))
+  expect(onDelete).toHaveBeenCalledOnce()
+  confirmSpy.mockRestore()
+})
+
+test('Delete does not call onDelete when the confirmation is declined', () => {
+  const onDelete = vi.fn()
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  render(<PersonProfile {...baseProps({ onDelete })} />)
+  fireEvent.click(screen.getByText('Delete'))
+  expect(onDelete).not.toHaveBeenCalled()
+  confirmSpy.mockRestore()
+})
+
+test('uploading a photo calls onUploadPhoto and shows a success message', async () => {
+  const onUploadPhoto = vi.fn().mockResolvedValue({ ok: true })
+  const { container } = render(<PersonProfile {...baseProps({ onUploadPhoto })} />)
+  const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement
+  fireEvent.change(input, { target: { files: [file] } })
+  expect(onUploadPhoto).toHaveBeenCalledWith(file)
+  await waitFor(() => expect(screen.getByText('Photo uploaded.')).toBeInTheDocument())
+})
+
+test('uploading a photo shows an error message on failure', async () => {
+  const onUploadPhoto = vi.fn().mockResolvedValue({ ok: false, message: 'incorrect passphrase' })
+  const { container } = render(<PersonProfile {...baseProps({ onUploadPhoto })} />)
+  const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement
+  fireEvent.change(input, { target: { files: [file] } })
+  await waitFor(() => expect(screen.getByText('incorrect passphrase')).toBeInTheDocument())
 })

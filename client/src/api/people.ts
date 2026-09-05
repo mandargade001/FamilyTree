@@ -3,7 +3,10 @@ import { getPassphrase } from '../lib/passphrase'
 import type { Person, PersonFields } from '../types'
 
 export async function fetchPeople(): Promise<Person[]> {
-  const { data, error } = await supabase.from('people').select('*')
+  // Ordering by created_at makes the default focal/root person deterministic:
+  // the first person ever entered (rather than whatever order Postgres
+  // happens to return rows in).
+  const { data, error } = await supabase.from('people').select('*').order('created_at')
   if (error) throw error
   return data as Person[]
 }

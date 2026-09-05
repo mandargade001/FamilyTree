@@ -8,8 +8,11 @@ vi.mock('./api/people', () => ({
 }))
 vi.mock('./api/relationships', () => ({
   fetchRelationships: vi.fn().mockResolvedValue([]),
-  addRelationship: vi.fn(),
+  addRelationship: vi.fn().mockResolvedValue('new-rel-id'),
   deleteRelationship: vi.fn(),
+}))
+vi.mock('./api/photos', () => ({
+  uploadPhoto: vi.fn(),
 }))
 vi.mock('./lib/supabaseClient', () => ({
   supabase: { rpc: vi.fn(), from: vi.fn() },
@@ -18,7 +21,8 @@ vi.mock('./lib/supabaseClient', () => ({
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { beforeEach } from 'vitest'
 import App from './App'
-import { addPerson, updatePerson } from './api/people'
+import { addPerson, updatePerson, fetchPeople, deletePerson } from './api/people'
+import { addRelationship } from './api/relationships'
 
 beforeEach(() => localStorage.clear())
 
@@ -109,4 +113,114 @@ test('a failed create-new-person round trip does not strand the UI or throw unha
   // rather than being stuck on the loading state or throwing an unhandled rejection.
   await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument())
   expect(screen.queryByText('Creating person…')).not.toBeInTheDocument()
+})
+
+test('shows a persistent Add Person button once the tree has people, opening the add-person form', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Meera Gade')).toBeInTheDocument())
+
+  fireEvent.click(screen.getAllByText('Add Person')[0])
+  await waitFor(() => expect(screen.getByText('Save')).toBeInTheDocument())
+})
+
+test('picking Child on the relationship picker makes the anchor the parent', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('rohan-id')
+  await openMeeraProfile()
+
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Child'))
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Rohan' } })
+  fireEvent.click(screen.getByText('Create new person "Rohan"'))
+
+  await waitFor(() =>
+    expect(addRelationship).toHaveBeenCalledWith('parent-child', 'meera', expect.any(String)),
+  )
+})
+
+test('picking Parent on the relationship picker makes the picked person the parent of the anchor', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('ravi-id')
+  await openMeeraProfile()
+
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+
+  // 'Parent' is the default selected type.
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Ravi' } })
+  fireEvent.click(screen.getByText('Create new person "Ravi"'))
+
+  await waitFor(() =>
+    expect(addRelationship).toHaveBeenCalledWith('parent-child', expect.any(String), 'meera'),
+  )
+})
+
+test('shows a distinct load-failure state on fetch failure, not the empty-tree state', async () => {
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('network down'))
+  render(<App />)
+  await waitFor(() => expect(screen.getByText(/Couldn't load your family tree/)).toBeInTheDocument())
+  expect(screen.queryByText('Add the first person')).not.toBeInTheDocument()
+})
+
+test('a failed save shows an inline error and keeps the form open', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(updatePerson as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('validation failed'))
+  await openMeeraProfile()
+
+  fireEvent.click(screen.getByText('Edit Profile'))
+  await waitFor(() => expect(screen.getByText('Edit Person')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Save'))
+
+  await waitFor(() => expect(screen.getByText('validation failed')).toBeInTheDocument())
+  // Form is still open — the save failure didn't silently discard the edit.
+  expect(screen.getByText('Edit Person')).toBeInTheDocument()
+})
+
+test('an incorrect-passphrase write failure clears the stored passphrase and reopens the gate', async () => {
+  localStorage.setItem('vansh:passphrase', 'stale-passphrase')
+  ;(updatePerson as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('incorrect passphrase'))
+  await openMeeraProfile()
+
+  fireEvent.click(screen.getByText('Edit Profile'))
+  await waitFor(() => expect(screen.getByText('Edit Person')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Save'))
+
+  await waitFor(() => expect(screen.getByText('Enter the family passphrase')).toBeInTheDocument())
+  expect(localStorage.getItem('vansh:passphrase')).toBeNull()
+})
+
+test('Center tree here re-roots the tree on that person', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '2020-01-01', updated_at: '' },
+    { id: 'anna', first_name: 'Anna', last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '2020-01-02', updated_at: '' },
+  ])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Meera Gade')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Meera Gade'))
+  await waitFor(() => expect(screen.getByText('Center tree here')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Center tree here'))
+
+  // Re-rooting doesn't throw and the app keeps rendering (Meera's profile stays open).
+  expect(screen.getByText('Edit Profile')).toBeInTheDocument()
+})
+
+test('deleting the focal person returns to the bare tree view', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  ;(deletePerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined)
+  await openMeeraProfile()
+
+  // Only the post-delete refetch (inside handleDeletePerson) should see an
+  // empty list — the initial mount load above already consumed the module's
+  // default resolved value.
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
+
+  fireEvent.click(screen.getByText('Delete'))
+  await waitFor(() => expect(deletePerson).toHaveBeenCalledWith('meera'))
+  await waitFor(() => expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument())
 })

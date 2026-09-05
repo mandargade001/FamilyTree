@@ -1,21 +1,28 @@
 import { useState } from 'react'
-import type { Person, RelationshipType } from '../../types'
+import type { Person } from '../../types'
 import { Icon } from '../shared/Icon'
 import { Button } from '../shared/Button'
+
+// UI-facing pick kind: distinguishes "the picked person becomes the anchor's
+// parent" from "the picked person becomes the anchor's child" — a direction
+// the DB-facing RelationshipType ('parent-child' | 'spouse') doesn't carry on
+// its own. Callers translate this into the correct addRelationship from/to
+// order (see App.tsx's handleLinkExisting).
+export type PickKind = 'parent' | 'child' | 'spouse'
 
 interface RelationshipPickerProps {
   anchorPerson: Person
   people: Person[]
-  onLinkExisting: (type: RelationshipType, personId: string) => void
-  onCreateNew: (type: RelationshipType, searchText: string) => void
+  onLinkExisting: (kind: PickKind, personId: string) => void
+  onCreateNew: (kind: PickKind, searchText: string) => void
   onCancel: () => void
 }
 
-const TYPES: RelationshipType[] = ['parent-child', 'spouse']
-const LABELS: Record<RelationshipType, string> = { 'parent-child': 'Parent', spouse: 'Spouse' }
+const TYPES: PickKind[] = ['parent', 'child', 'spouse']
+const LABELS: Record<PickKind, string> = { parent: 'Parent', child: 'Child', spouse: 'Spouse' }
 
 export function RelationshipPicker({ anchorPerson, people, onLinkExisting, onCreateNew, onCancel }: RelationshipPickerProps) {
-  const [type, setType] = useState<RelationshipType>('parent-child')
+  const [type, setType] = useState<PickKind>('parent')
   const [search, setSearch] = useState('')
 
   const results = people.filter(

@@ -31,6 +31,15 @@ test('clicking a result calls onLinkExisting with the selected relationship type
   expect(onLinkExisting).toHaveBeenCalledWith('spouse', 'priya')
 })
 
+test('offers a Child option that calls onLinkExisting with kind "child"', () => {
+  const onLinkExisting = vi.fn()
+  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={onLinkExisting} onCreateNew={() => {}} onCancel={() => {}} />)
+  fireEvent.click(screen.getByText('Child'))
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Priya' } })
+  fireEvent.click(screen.getByText('Priya'))
+  expect(onLinkExisting).toHaveBeenCalledWith('child', 'priya')
+})
+
 test('shows a create-new row with the current search text', () => {
   render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={() => {}} />)
   fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Kiran' } })

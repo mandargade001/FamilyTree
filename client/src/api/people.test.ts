@@ -14,12 +14,15 @@ vi.mock('../lib/passphrase', () => ({
 import { supabase } from '../lib/supabaseClient'
 import { fetchPeople, addPerson } from './people'
 
-test('fetchPeople selects all rows from the people table', async () => {
-  const select = vi.fn().mockResolvedValue({ data: [{ id: '1', first_name: 'Anna' }], error: null })
+test('fetchPeople selects all rows from the people table ordered by created_at', async () => {
+  const order = vi.fn().mockResolvedValue({ data: [{ id: '1', first_name: 'Anna' }], error: null })
+  const select = vi.fn().mockReturnValue({ order })
   ;(supabase.from as any).mockReturnValue({ select })
 
   const people = await fetchPeople()
   expect(supabase.from).toHaveBeenCalledWith('people')
+  expect(select).toHaveBeenCalledWith('*')
+  expect(order).toHaveBeenCalledWith('created_at')
   expect(people).toEqual([{ id: '1', first_name: 'Anna' }])
 })
 
