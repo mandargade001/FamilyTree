@@ -53,3 +53,11 @@ textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
 .couple-slots { display: flex; align-items: center; gap: 20px; justify-content: center; }
 .person-slot { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); }
 .sibling-list { margin-top: var(--space-sm); }
+
+.gate-shell { max-width: 320px; margin: 44px auto; text-align: center; }
+.gate-icon { width: 44px; height: 44px; border-radius: 50%; margin: 0 auto 18px; background: var(--thread-soft); border: 1.5px solid var(--thread); color: var(--thread); display: flex; align-items: center; justify-content: center; }
+.gate-title { font-family: 'Bitter', Georgia, serif; font-weight: 700; font-size: 17px; }
+.gate-sub { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.gate-input { height: 40px; margin: 18px 0; text-align: center; letter-spacing: .3em; }
+.gate-error { color: var(--stitch-new); font-size: 12px; margin-bottom: 12px; }
+.gate-cancel { display: block; margin: 10px auto 0; background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; }
