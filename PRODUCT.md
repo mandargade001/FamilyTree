@@ -1,4 +1,4 @@
-# Product
+# Vansh
 
 <!-- impeccable:product-schema 1 -->
 
@@ -35,7 +35,7 @@ Unlike a shared spreadsheet or a heavyweight genealogy suite (e.g. Gramps/Ancest
 - Cycle-guard prevents a person from being recorded as their own ancestor.
 - Deleting a person cascades its relationships, with a confirmation step warning how many links will be removed.
 - No individual accounts/attribution, no GEDCOM import/export, no source citations beyond photos, and no passphrase-rotation flow — explicitly out of scope for this build.
-- Name: undecided/placeholder ("Family Tree") for now.
+- Name: Vansh (Hindi/Sanskrit for lineage/descendants) — confirmed.
 
 ## Evidence on Hand
 
