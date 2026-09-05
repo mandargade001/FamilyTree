@@ -124,7 +124,8 @@ test('update_person rejects a nonexistent person id', async () => {
 test('delete_person removes the row and cascades its relationships', async () => {
   const { data: parentId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Deletable Parent' })
   const { data: childId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Deletable Child' })
-  await supabase.rpc('add_relationship', { p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId })
+  const { error: relError } = await supabase.rpc('add_relationship', { p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId })
+  assert.equal(relError, null)
 
   const { error } = await supabase.rpc('delete_person', { p_passphrase: 'changeme', p_id: parentId })
   assert.equal(error, null)
@@ -140,4 +141,76 @@ test('delete_person rejects the wrong passphrase and leaves the row intact', asy
 
   const { data: row } = await supabase.from('people').select('*').eq('id', id).single()
   assert.ok(row)
+})
+
+test('add_relationship links a parent to a child', async () => {
+  const { data: parentId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Meera' })
+  const { data: childId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Rohan' })
+
+  const { data, error } = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId,
+  })
+  assert.equal(error, null)
+  assert.ok(data)
+})
+
+test('add_relationship rejects a relationship that would make someone their own ancestor', async () => {
+  const { data: grandparentId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Grandparent' })
+  const { data: parentId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Parent' })
+  const { data: childId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Child' })
+
+  await supabase.rpc('add_relationship', { p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: grandparentId, p_to_id: parentId })
+  await supabase.rpc('add_relationship', { p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId })
+
+  // Child cannot become an ancestor of Grandparent — this would create a cycle.
+  const { error } = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: childId, p_to_id: grandparentId,
+  })
+  assert.ok(error, 'expected the cycle to be rejected')
+})
+
+test('add_relationship rejects an invalid relationship type', async () => {
+  const { data: a } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'A' })
+  const { data: b } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'B' })
+  const { error } = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'sibling', p_from_id: a, p_to_id: b,
+  })
+  assert.ok(error)
+})
+
+test('delete_relationship removes the row with the correct passphrase', async () => {
+  const { data: parentId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Rel Parent' })
+  const { data: childId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Rel Child' })
+  const { data: relId, error: relError } = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId,
+  })
+  assert.equal(relError, null)
+
+  const { error } = await supabase.rpc('delete_relationship', { p_passphrase: 'changeme', p_id: relId })
+  assert.equal(error, null)
+
+  const { data: row } = await supabase.from('relationships').select('*').eq('id', relId)
+  assert.equal(row.length, 0)
+})
+
+test('delete_relationship rejects the wrong passphrase and leaves the row intact', async () => {
+  const { data: parentId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Rel Parent 2' })
+  const { data: childId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Rel Child 2' })
+  const { data: relId, error: relError } = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId,
+  })
+  assert.equal(relError, null)
+
+  const { error } = await supabase.rpc('delete_relationship', { p_passphrase: 'wrong', p_id: relId })
+  assert.ok(error)
+
+  const { data: row } = await supabase.from('relationships').select('*').eq('id', relId).single()
+  assert.ok(row)
+})
+
+test('delete_relationship rejects a nonexistent relationship id', async () => {
+  const fakeId = '00000000-0000-0000-0000-000000000000'
+  const { error } = await supabase.rpc('delete_relationship', { p_passphrase: 'changeme', p_id: fakeId })
+  assert.ok(error, 'expected delete_relationship to reject nonexistent relationship id')
+  assert.match(error.message, /relationship not found/i)
 })
