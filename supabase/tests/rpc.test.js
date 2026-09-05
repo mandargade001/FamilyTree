@@ -120,3 +120,24 @@ test('update_person rejects a nonexistent person id', async () => {
   assert.ok(error, 'expected update_person to reject nonexistent person id')
   assert.match(error.message, /person not found/i)
 })
+
+test('delete_person removes the row and cascades its relationships', async () => {
+  const { data: parentId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Deletable Parent' })
+  const { data: childId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Deletable Child' })
+  await supabase.rpc('add_relationship', { p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: parentId, p_to_id: childId })
+
+  const { error } = await supabase.rpc('delete_person', { p_passphrase: 'changeme', p_id: parentId })
+  assert.equal(error, null)
+
+  const { data: remaining } = await supabase.from('relationships').select('*').eq('from_id', parentId)
+  assert.equal(remaining.length, 0)
+})
+
+test('delete_person rejects the wrong passphrase and leaves the row intact', async () => {
+  const { data: id } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Protected' })
+  const { error } = await supabase.rpc('delete_person', { p_passphrase: 'wrong', p_id: id })
+  assert.ok(error)
+
+  const { data: row } = await supabase.from('people').select('*').eq('id', id).single()
+  assert.ok(row)
+})

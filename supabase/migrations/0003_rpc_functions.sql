@@ -76,3 +76,41 @@ end;
 $$;
 
 grant execute on function update_person(text, uuid, text, text, text, text, text, text, text, text) to anon, authenticated;
+
+create or replace function delete_person(p_passphrase text, p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not verify_passphrase(p_passphrase) then
+    raise exception 'incorrect passphrase';
+  end if;
+  delete from people where id = p_id;
+  if not found then
+    raise exception 'person not found';
+  end if;
+end;
+$$;
+
+grant execute on function delete_person(text, uuid) to anon, authenticated;
+
+create or replace function delete_relationship(p_passphrase text, p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not verify_passphrase(p_passphrase) then
+    raise exception 'incorrect passphrase';
+  end if;
+  delete from relationships where id = p_id;
+  if not found then
+    raise exception 'relationship not found';
+  end if;
+end;
+$$;
+
+grant execute on function delete_relationship(text, uuid) to anon, authenticated;
