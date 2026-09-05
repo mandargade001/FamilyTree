@@ -43,13 +43,16 @@ test('clicking the sibling flap reveals the siblings', () => {
 
 test('shows an Add Parent slot above a person with no recorded parents', () => {
   render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
-  expect(screen.getByText('Add Parent')).toBeInTheDocument()
+  // Anna and Ravi are both parentless in this fixture, so both members of the
+  // couple independently get their own slot.
+  expect(screen.getAllByText('Add Parent')).toHaveLength(2)
 })
 
-test('clicking Add Parent calls onAddParent with the topmost person', () => {
+test('clicking an Add Parent slot calls onAddParent with that specific person', () => {
   const onAddParent = vi.fn()
   render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} />)
-  fireEvent.click(screen.getByText('Add Parent'))
+  const addParentButtons = screen.getAllByText('Add Parent')
+  fireEvent.click(addParentButtons[0])
   expect(onAddParent).toHaveBeenCalledWith('anna')
 })
 
@@ -78,8 +81,8 @@ test('shows an Add Parent slot for a shallower person even when another lineage 
   // depth 2 and making it the tree's deepest row — but Anna's parents are not
   // recorded. Anna sits at the shallower depth 1, and must still get her own
   // Add Parent slot rather than only whoever is at the single deepest row.
-  // RaviDad/RaviMom, having no recorded parents of their own, correctly get a
-  // slot too: both should appear, independently, at their own depths.
+  // RaviDad and RaviMom, each having no recorded parents of their own,
+  // independently get a slot too: three total, one per parentless person.
   const asymmetricPeople = [...people, person('ravi_dad', 'RaviDad'), person('ravi_mom', 'RaviMom')]
   const asymmetricRelationships: Relationship[] = [
     ...relationships,
@@ -90,8 +93,45 @@ test('shows an Add Parent slot for a shallower person even when another lineage 
   const onAddParent = vi.fn()
   render(<TreeView people={asymmetricPeople} relationships={asymmetricRelationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} />)
   const addParentButtons = screen.getAllByText('Add Parent')
-  expect(addParentButtons).toHaveLength(2)
+  expect(addParentButtons).toHaveLength(3)
   addParentButtons.forEach((button) => fireEvent.click(button))
   expect(onAddParent).toHaveBeenCalledWith('anna')
   expect(onAddParent).toHaveBeenCalledWith('ravi_dad')
+  expect(onAddParent).toHaveBeenCalledWith('ravi_mom')
+  expect(onAddParent).not.toHaveBeenCalledWith('ravi')
+})
+
+test('shows an Add Parent slot for the spouse side of a couple, not just the anchor', () => {
+  // Give Anna (the row unit's anchor, per relationship ordering) her own
+  // recorded parents, while Ravi (her spouse in the unit) stays parentless.
+  // Only Ravi should get a slot — proving the check isn't anchored to
+  // unit.personId alone.
+  const spousePeople = [...people, person('anna_dad', 'AnnaDad'), person('anna_mom', 'AnnaMom')]
+  const spouseRelationships: Relationship[] = [
+    ...relationships,
+    { id: 'r8', type: 'spouse', from_id: 'anna_dad', to_id: 'anna_mom' },
+    { id: 'r9', type: 'parent-child', from_id: 'anna_dad', to_id: 'anna' },
+    { id: 'r10', type: 'parent-child', from_id: 'anna_mom', to_id: 'anna' },
+  ]
+  const onAddParent = vi.fn()
+  render(<TreeView people={spousePeople} relationships={spouseRelationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} />)
+  screen.getAllByText('Add Parent').forEach((button) => fireEvent.click(button))
+  expect(onAddParent).toHaveBeenCalledWith('ravi')
+  expect(onAddParent).not.toHaveBeenCalledWith('anna')
+})
+
+test('shows a sibling flap for the spouse side of a couple, not just the anchor', () => {
+  // Ravi (the unit's spouse, not the anchor Anna) has his own recorded
+  // parent and sibling — Anna has none of her own. Only Ravi should get a
+  // sibling flap, proving the check isn't anchored to unit.personId alone.
+  const siblingSpousePeople = [...people, person('ravi_parent', 'RaviParent'), person('ravi_sibling', 'RaviSibling')]
+  const siblingSpouseRelationships: Relationship[] = [
+    ...relationships,
+    { id: 'r8', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi' },
+    { id: 'r9', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi_sibling' },
+  ]
+  render(<TreeView people={siblingSpousePeople} relationships={siblingSpouseRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  expect(screen.getByText('1 sibling')).toBeInTheDocument()
+  fireEvent.click(screen.getByText('1 sibling'))
+  expect(screen.getByText('RaviSibling')).toBeInTheDocument()
 })

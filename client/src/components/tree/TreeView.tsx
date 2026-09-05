@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import type { Person, Relationship } from '../../types'
 import { buildAncestorRows, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
-import { PersonPatch } from './PersonPatch'
-import { SeamLine } from './SeamLine'
+import { Couple } from './Couple'
 import { SiblingFlap } from './SiblingFlap'
 import { AddParentSlot } from './AddParentSlot'
 import { CollapseToggle } from './CollapseToggle'
@@ -46,14 +45,14 @@ function DescendantBranch({
 
   return (
     <div className="gen-column">
-      <div className="couple">
-        <PersonPatch person={person} {...stateFor(personId)} fresh={false} onOpen={onOpenProfile} onDoubleOpen={onDoubleOpen} />
-        {spouse && (
-          <>
-            <SeamLine kind="spouse" />
-            <PersonPatch person={spouse} {...stateFor(spouse.id)} fresh={false} onOpen={onOpenProfile} onDoubleOpen={onDoubleOpen} />
-          </>
-        )}
+      <Couple
+        person={person}
+        spouse={spouse}
+        onOpen={onOpenProfile}
+        onDoubleOpen={onDoubleOpen}
+        personState={stateFor(personId)}
+        spouseState={spouse ? stateFor(spouse.id) : undefined}
+      >
         {childIds.length > 0 && (
           <CollapseToggle
             expanded={expanded}
@@ -61,7 +60,7 @@ function DescendantBranch({
             onToggle={() => setExpanded((v) => !v)}
           />
         )}
-      </div>
+      </Couple>
       {expanded && childIds.length > 0 && (
         <div className="descendants">
           <div className="gen">
@@ -99,6 +98,29 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     })
   }
 
+  // For a given ancestor-row member (whether the row unit's anchor or their
+  // spouse), a missing recorded parent and a set of recorded siblings are
+  // both independent per-person facts — buildAncestorRows' choice of which
+  // side becomes `personId` vs `spouseId` is arbitrary w.r.t. the underlying
+  // relationship data, so both sides of a couple must be checked separately.
+  function siblingsOf(personId: string) {
+    return getSiblingIds(personId, relationships).filter((id) => byId.has(id))
+  }
+
+  function renderSiblingList(ids: string[]) {
+    return (
+      <div className="gen sibling-list">
+        {ids.map((sibId) => {
+          const sibling = byId.get(sibId)
+          if (!sibling) return null
+          const sibSpouseId = getSpouseIds(sibId, relationships)[0]
+          const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) : null
+          return <Couple key={sibId} person={sibling} spouse={sibSpouse} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
+        })}
+      </div>
+    )
+  }
+
   return (
     <div className="tree">
       {focalChildren.length > 0 && (
@@ -125,51 +147,56 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
             const person = byId.get(unit.personId)
             if (!person) return null
             const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
-            const siblingIds = getSiblingIds(unit.personId, relationships).filter((id) => byId.has(id))
-            const hasParents = getParentIds(unit.personId, relationships).length > 0
+
+            const personHasParents = getParentIds(unit.personId, relationships).length > 0
+            const spouseHasParents = spouse ? getParentIds(spouse.id, relationships).length > 0 : true
+            const personSiblingIds = siblingsOf(unit.personId)
+            const spouseSiblingIds = spouse ? siblingsOf(spouse.id) : []
+
+            const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
+            const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
 
             return (
               <div className="gen-column" key={unit.personId}>
-                {!hasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
-                <div className="couple">
-                  <PersonPatch person={person} inFocus={false} dimmed={false} fresh={false} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
-                  {spouse && (
-                    <>
-                      <SeamLine kind="spouse" />
-                      <PersonPatch person={spouse} inFocus={false} dimmed={false} fresh={false} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
-                    </>
-                  )}
-                </div>
-                {siblingIds.length > 0 && (
-                  <>
-                    <SiblingFlap
-                      count={siblingIds.length}
-                      open={openFlaps.has(unit.personId)}
-                      onToggle={() => toggleFlap(unit.personId)}
-                    />
-                    {openFlaps.has(unit.personId) && (
-                      <div className="gen" style={{ marginTop: 8 }}>
-                        {siblingIds.map((sibId) => {
-                          const sibling = byId.get(sibId)
-                          if (!sibling) return null
-                          const sibSpouseId = getSpouseIds(sibId, relationships)[0]
-                          const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) : null
-                          return (
-                            <div className="couple" key={sibId}>
-                              <PersonPatch person={sibling} inFocus={false} dimmed={false} fresh={false} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
-                              {sibSpouse && (
-                                <>
-                                  <SeamLine kind="spouse" />
-                                  <PersonPatch person={sibSpouse} inFocus={false} dimmed={false} fresh={false} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
-                                </>
-                              )}
-                            </div>
-                          )
-                        })}
+                {anyMissingParent && (
+                  <div className="couple-slots">
+                    <div className="person-slot">
+                      {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
+                    </div>
+                    {spouse && (
+                      <div className="person-slot">
+                        {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
+                <Couple person={person} spouse={spouse} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
+                {anyHasSiblings && (
+                  <div className="couple-slots">
+                    <div className="person-slot">
+                      {personSiblingIds.length > 0 && (
+                        <SiblingFlap
+                          count={personSiblingIds.length}
+                          open={openFlaps.has(unit.personId)}
+                          onToggle={() => toggleFlap(unit.personId)}
+                        />
+                      )}
+                    </div>
+                    {spouse && (
+                      <div className="person-slot">
+                        {spouseSiblingIds.length > 0 && (
+                          <SiblingFlap
+                            count={spouseSiblingIds.length}
+                            open={openFlaps.has(spouse.id)}
+                            onToggle={() => toggleFlap(spouse.id)}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {personSiblingIds.length > 0 && openFlaps.has(unit.personId) && renderSiblingList(personSiblingIds)}
+                {spouse && spouseSiblingIds.length > 0 && openFlaps.has(spouse.id) && renderSiblingList(spouseSiblingIds)}
               </div>
             )
           })}
