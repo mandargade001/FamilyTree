@@ -6,13 +6,15 @@
 
 **Architecture:** Two independent halves that meet only at the Supabase API surface. The database half (`supabase/`) owns schema, RLS, and passphrase-checked RPC functions — the only way to write data. The frontend half (`client/`) is a static SPA: pure graph functions compute what to render from `people`/`relationships` rows, presentational components render it in the Family Quilt visual language, and thin API wrappers call the RPCs. No custom server process exists anywhere.
 
-**Tech Stack:** React 18 + TypeScript + Vite, `@supabase/supabase-js`, Vitest + React Testing Library (frontend tests), Supabase CLI local stack + Node's built-in test runner (database tests), GitHub Actions + GitHub Pages (deploy).
+**Tech Stack:** React 18 + TypeScript + Vite, `@supabase/supabase-js`, Vitest + React Testing Library (frontend tests), a native local PostgreSQL install + `pg` + Node's built-in test runner (database tests — see the note below), GitHub Actions + GitHub Pages (deploy).
+
+**Deviation from spec — local database testing:** the original plan used the Supabase CLI's Docker-based local stack (`supabase start`) for database tests. This machine's container policy blocks Docker, so database tests (Tasks 2–6) instead run against a native local PostgreSQL install via the `pg` npm package, through a thin shim (`supabase/tests/db.js`) that mimics the `@supabase/supabase-js` calls the real app uses. This only changes how local tests connect — the migrations themselves are unchanged and portable, and the deployed app always talks to a real hosted Supabase project (see Task 22).
 
 **Deviation from spec, noted here so it isn't mistaken for drift later:** the original design spec named the `family-chart` npm library for tree rendering. The approved Family Quilt visual/interaction system (dashed stitched patches, unfolding sibling flaps, seam-line connectors, focus-mode dimming) was designed and validated directly in HTML/CSS/flexbox, not against that library's rendering model, and doesn't map cleanly onto it. This plan builds the tree with plain React components and CSS layout instead of `family-chart`, since that's what the approved comp actually is.
 
 ## Global Constraints
 
-- Node.js 20+, npm (not yarn/pnpm) for the client; Supabase CLI + Docker for local database development and tests.
+- Node.js 20+, npm (not yarn/pnpm) for the client; a native local PostgreSQL install (via Homebrew) for local database development and tests — no Docker/Supabase CLI locally (see the deviation note above).
 - All colors, spacing, radii, and type come from `DESIGN.md` — copy the exact hex/px/font values from that file into `client/src/styles/tokens.css`; no ad-hoc colors.
 - Every table write goes through an RPC function that checks the passphrase; no table ever gets a public insert/update/delete RLS policy.
 - `people.first_name` is the only required person field; every other person field and every relationship must degrade gracefully when absent.
@@ -74,6 +76,7 @@ FamilyTree/
     ├── functions/
     │   └── upload-photo/index.ts
     └── tests/
+        ├── db.js
         └── rpc.test.js
 ```
 
@@ -303,20 +306,27 @@ git commit -m "Scaffold Vite/React client with Family Quilt design tokens"
 
 ---
 
-### Task 2: Supabase project and core schema
+### Task 2: Local Postgres and core schema
 
 **Files:**
 - Create: `supabase/migrations/0001_init_schema.sql`
 - Create: `supabase/package.json`
+- Create: `supabase/tests/db.js`
 - Create: `supabase/tests/rpc.test.js`
 
 **Interfaces:**
-- Produces: tables `people(id, first_name, last_name, gender, birth_date, death_date, birth_place, occupation, bio, created_at, updated_at)` and `relationships(id, type, from_id, to_id, created_at)`.
+- Produces: tables `people(id, first_name, last_name, gender, birth_date, death_date, birth_place, occupation, bio, created_at, updated_at)` and `relationships(id, type, from_id, to_id, created_at)`; a `supabase/tests/db.js` test harness exposing a `supabase`-shaped object (`.rpc()`, `.from(table).select()/.insert()`) backed directly by Postgres via the `pg` npm package, plus the raw `pool` for role-switching.
 
-- [ ] **Step 1: Initialize the Supabase project**
+**Local database setup (no Docker):** this project's database tests run against a native local PostgreSQL install, not the Supabase CLI's Docker-based local stack (blocked by this machine's container policy). The deployed app is unaffected — it always talks to a real hosted Supabase project, never this local database.
 
-Run: `npx supabase init` (from repo root — creates `supabase/config.toml`)
-Run: `npx supabase start` (starts the local Postgres/Studio/Auth stack via Docker; prints an `anon key` and `API URL` — keep this terminal running for later steps)
+- [ ] **Step 1: Install and start PostgreSQL locally, create the dev database and roles**
+
+Run: `brew install postgresql@16`
+Run: `brew services start postgresql@16`
+Run: `createdb vansh_dev`
+Run: `psql vansh_dev -c "create role anon nologin; create role authenticated nologin;"` — one-time, local-only. These exact role names (`anon`, `authenticated`) already exist in any real Supabase project; creating them locally means the same migration SQL (which only ever `grant`s to these names) works unchanged in both places.
+
+Confirm connectivity: `psql vansh_dev -c "select 1;"` → expect a single row containing `1`.
 
 - [ ] **Step 2: Write the schema migration**
 
@@ -352,8 +362,8 @@ create index relationships_to_id_idx on relationships(to_id);
 
 - [ ] **Step 3: Apply the migration and verify the tables exist**
 
-Run: `npx supabase migration up`
-Run: `npx supabase db execute --sql "select table_name from information_schema.tables where table_schema = 'public' order by table_name;"`
+Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done` (this is the standard way every later task applies new migrations too — always re-run the whole loop, it's idempotent-safe since each task only adds new files)
+Run: `psql vansh_dev -c "select table_name from information_schema.tables where table_schema = 'public' order by table_name;"`
 Expected output includes: `people`, `relationships`
 
 - [ ] **Step 4: Set up the database test harness**
@@ -368,8 +378,87 @@ Expected output includes: `people`, `relationships`
     "test": "node --test tests/"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.4"
+    "pg": "^8.13.0"
   }
+}
+```
+
+`supabase/tests/db.js` — a thin shim exposing the same `.rpc()` / `.from(table).select()/.insert()` shape the app's real `@supabase/supabase-js` client uses, so every later task's test code reads identically to what it would against real Supabase:
+```js
+import pg from 'pg'
+
+const { Pool } = pg
+export const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? 'postgresql:///vansh_dev' })
+
+function toError(err) {
+  return { message: err.message }
+}
+
+export const supabase = {
+  async rpc(fnName, args = {}) {
+    const keys = Object.keys(args)
+    const values = keys.map((k) => args[k])
+    const namedArgs = keys.map((k, i) => `${k} := $${i + 1}`).join(', ')
+    try {
+      const res = await pool.query(`select ${fnName}(${namedArgs}) as result`, values)
+      return { data: res.rows[0]?.result ?? null, error: null }
+    } catch (err) {
+      return { data: null, error: toError(err) }
+    }
+  },
+  from(table) {
+    return {
+      select(cols = '*') {
+        const state = { filters: [], limitN: null }
+        async function run() {
+          let sql = `select ${cols} from ${table}`
+          const values = []
+          state.filters.forEach((f, i) => {
+            sql += i === 0 ? ' where' : ' and'
+            values.push(f.val)
+            sql += ` ${f.col} = $${values.length}`
+          })
+          if (state.limitN) sql += ` limit ${state.limitN}`
+          try {
+            const res = await pool.query(sql, values)
+            return { data: res.rows, error: null }
+          } catch (err) {
+            return { data: null, error: toError(err) }
+          }
+        }
+        const builder = {
+          eq(col, val) {
+            state.filters.push({ col, val })
+            return builder
+          },
+          limit(n) {
+            state.limitN = n
+            return builder
+          },
+          async single() {
+            const r = await run()
+            if (r.error) return r
+            return r.data[0] ? { data: r.data[0], error: null } : { data: null, error: { message: 'no rows' } }
+          },
+          then(resolve, reject) {
+            return run().then(resolve, reject)
+          },
+        }
+        return builder
+      },
+      async insert(row) {
+        const keys = Object.keys(row)
+        const values = keys.map((k) => row[k])
+        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ')
+        try {
+          await pool.query(`insert into ${table} (${keys.join(', ')}) values (${placeholders})`, values)
+          return { error: null }
+        } catch (err) {
+          return { error: toError(err) }
+        }
+      },
+    }
+  },
 }
 ```
 
@@ -377,15 +466,7 @@ Expected output includes: `people`, `relationships`
 ```js
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createClient } from '@supabase/supabase-js'
-
-const SUPABASE_URL = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321'
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
-if (!SUPABASE_ANON_KEY) {
-  throw new Error('Set SUPABASE_ANON_KEY to the local anon key printed by `supabase start`')
-}
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+import { supabase } from './db.js'
 
 test('people table exists and accepts a row via service-level insert check', async () => {
   const { error } = await supabase.from('people').select('id').limit(1)
@@ -393,7 +474,7 @@ test('people table exists and accepts a row via service-level insert check', asy
 })
 ```
 
-Run: `cd supabase && npm install && SUPABASE_ANON_KEY=<key from supabase start> npm test`
+Run: `cd supabase && npm install && npm test`
 Expected: PASS (1 test)
 
 - [ ] **Step 5: Commit**
@@ -413,14 +494,20 @@ git commit -m "Add Supabase project with people/relationships schema"
 
 **Interfaces:**
 - Produces: SQL function `verify_passphrase(p_passphrase text) returns boolean`.
+- Consumes: `pool` (raw `pg` Pool) from `supabase/tests/db.js`, Task 2 — needed here because the test connection is the database owner/superuser by default, which bypasses Row-Level Security entirely; asserting RLS actually blocks a write requires briefly running the query as the low-privilege `anon` role instead.
 
 - [ ] **Step 1: Write the failing test (direct write must be rejected, verify_passphrase must exist)**
 
-Add to `supabase/tests/rpc.test.js`:
+First, change the existing top-of-file import in `supabase/tests/rpc.test.js` from `import { supabase } from './db.js'` to `import { supabase, pool } from './db.js'`. Then add:
 ```js
 test('anon cannot insert into people directly (RLS blocks it)', async () => {
-  const { error } = await supabase.from('people').insert({ first_name: 'Blocked' })
-  assert.ok(error, 'expected an RLS error but insert succeeded')
+  await pool.query('set role anon')
+  try {
+    const { error } = await supabase.from('people').insert({ first_name: 'Blocked' })
+    assert.ok(error, 'expected an RLS error but insert succeeded')
+  } finally {
+    await pool.query('reset role')
+  }
 })
 
 test('verify_passphrase rejects the wrong passphrase', async () => {
@@ -432,7 +519,7 @@ test('verify_passphrase rejects the wrong passphrase', async () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd supabase && SUPABASE_ANON_KEY=<key> npm test`
+Run: `cd supabase && npm test`
 Expected: FAIL — insert currently succeeds (no RLS yet) and `verify_passphrase` does not exist.
 
 - [ ] **Step 3: Write the migration**
@@ -478,8 +565,8 @@ grant execute on function verify_passphrase(text) to anon, authenticated;
 
 - [ ] **Step 4: Apply the migration and run the tests**
 
-Run: `npx supabase migration up`
-Run: `cd supabase && SUPABASE_ANON_KEY=<key> npm test`
+Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done`
+Run: `cd supabase && npm test`
 Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
@@ -555,7 +642,7 @@ test('update_person changes fields on an existing person', async () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cd supabase && SUPABASE_ANON_KEY=<key> npm test`
+Run: `cd supabase && npm test`
 Expected: FAIL — `add_person`/`update_person` do not exist yet.
 
 - [ ] **Step 3: Write the migration**
@@ -644,8 +731,8 @@ grant execute on function update_person(text, uuid, text, text, text, text, text
 
 - [ ] **Step 4: Apply and run the tests**
 
-Run: `npx supabase migration up`
-Run: `cd supabase && SUPABASE_ANON_KEY=<key> npm test`
+Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done`
+Run: `cd supabase && npm test`
 Expected: PASS (7 tests)
 
 - [ ] **Step 5: Commit**
@@ -739,11 +826,11 @@ grant execute on function delete_relationship(text, uuid) to anon, authenticated
 
 - [ ] **Step 3: Apply the migration**
 
-Run: `npx supabase migration up`
+Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done`
 
 - [ ] **Step 4: Run the tests once Task 6's `add_relationship` also exists, verify pass**
 
-Run: `cd supabase && SUPABASE_ANON_KEY=<key> npm test`
+Run: `cd supabase && npm test`
 Expected: the two new tests pass once Task 6 is also complete (they depend on `add_relationship`).
 
 - [ ] **Step 5: Commit**
@@ -806,7 +893,7 @@ test('add_relationship rejects an invalid relationship type', async () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cd supabase && SUPABASE_ANON_KEY=<key> npm test`
+Run: `cd supabase && npm test`
 Expected: FAIL — `add_relationship` does not exist yet.
 
 - [ ] **Step 3: Write the migration addition**
@@ -867,8 +954,8 @@ grant execute on function add_relationship(text, text, uuid, uuid) to anon, auth
 
 - [ ] **Step 4: Apply the migration and run all Supabase tests**
 
-Run: `npx supabase migration up`
-Run: `cd supabase && SUPABASE_ANON_KEY=<key> npm test`
+Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done`
+Run: `cd supabase && npm test`
 Expected: PASS (all tests across Tasks 3–6, including the Task 5 tests that depended on this function)
 
 - [ ] **Step 5: Commit**
@@ -3289,9 +3376,13 @@ git commit -m "Add GitHub Pages deploy workflow"
 
 - [ ] **Step 1: Start the real stack**
 
-Run: `npx supabase start` (from repo root)
-Run: in `supabase migration up` to ensure the local DB has every migration
-Run: `cd client && VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_ANON_KEY=<local anon key> npm run dev`
+This manual pass needs the app's real code path (browser → `@supabase/supabase-js` → Supabase's REST/RPC layer), which the local Postgres-only test harness from Tasks 2–6 does not provide (that harness talks to Postgres directly, bypassing Supabase's API layer entirely). Since this machine's Docker policy blocks the Supabase CLI's local stack, use a real (free-tier) Supabase cloud project instead — the same one that will eventually back production, so this step doubles as deploy prep:
+
+- Create a free Supabase project at supabase.com (or have the user do this, since it requires an account).
+- Run `npx supabase link --project-ref <project-ref>` (no Docker involved — this only talks to the remote project).
+- Run `npx supabase db push` to apply every migration from `supabase/migrations/` to the real project.
+- Set the real project's passphrase: in the Supabase SQL editor, run `update app_config set value = crypt('<a real passphrase>', gen_salt('bf')) where key = 'passphrase_hash';`.
+- Run `cd client && VITE_SUPABASE_URL=<project URL> VITE_SUPABASE_ANON_KEY=<project anon key> npm run dev` (both values are in the Supabase project's API settings).
 
 - [ ] **Step 2: Walk the full add → link → view → edit → collapse/expand flow**
 
