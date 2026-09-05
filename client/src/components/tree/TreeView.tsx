@@ -88,7 +88,6 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   const [openFlaps, setOpenFlaps] = useState<Set<string>>(new Set())
   const byId = new Map(people.map((p) => [p.id, p]))
   const rows = buildAncestorRows(focalId, relationships)
-  const topDepth = Math.max(...rows.map((r) => r.depth))
   const focalChildren = getDescendantIds(focalId, relationships).filter((id) => byId.has(id))
   const focusedSet = null as Set<string> | null // populated in Task 14
 
@@ -128,11 +127,10 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
             const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
             const siblingIds = getSiblingIds(unit.personId, relationships).filter((id) => byId.has(id))
             const hasParents = getParentIds(unit.personId, relationships).length > 0
-            const isTopmost = row.depth === topDepth
 
             return (
               <div className="gen-column" key={unit.personId}>
-                {isTopmost && !hasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
+                {!hasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
                 <div className="couple">
                   <PersonPatch person={person} inFocus={false} dimmed={false} fresh={false} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
                   {spouse && (

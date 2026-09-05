@@ -72,3 +72,26 @@ test("a child's own children stay collapsed behind a toggle until clicked", () =
   fireEvent.click(screen.getByLabelText('Show Rohan’s children'))
   expect(screen.getByText('Aditi')).toBeInTheDocument()
 })
+
+test('shows an Add Parent slot for a shallower person even when another lineage traces back further', () => {
+  // Ravi's parents (RaviDad & RaviMom) are recorded, pushing that lineage to
+  // depth 2 and making it the tree's deepest row — but Anna's parents are not
+  // recorded. Anna sits at the shallower depth 1, and must still get her own
+  // Add Parent slot rather than only whoever is at the single deepest row.
+  // RaviDad/RaviMom, having no recorded parents of their own, correctly get a
+  // slot too: both should appear, independently, at their own depths.
+  const asymmetricPeople = [...people, person('ravi_dad', 'RaviDad'), person('ravi_mom', 'RaviMom')]
+  const asymmetricRelationships: Relationship[] = [
+    ...relationships,
+    { id: 'r8', type: 'spouse', from_id: 'ravi_dad', to_id: 'ravi_mom' },
+    { id: 'r9', type: 'parent-child', from_id: 'ravi_dad', to_id: 'ravi' },
+    { id: 'r10', type: 'parent-child', from_id: 'ravi_mom', to_id: 'ravi' },
+  ]
+  const onAddParent = vi.fn()
+  render(<TreeView people={asymmetricPeople} relationships={asymmetricRelationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} />)
+  const addParentButtons = screen.getAllByText('Add Parent')
+  expect(addParentButtons).toHaveLength(2)
+  addParentButtons.forEach((button) => fireEvent.click(button))
+  expect(onAddParent).toHaveBeenCalledWith('anna')
+  expect(onAddParent).toHaveBeenCalledWith('ravi_dad')
+})
