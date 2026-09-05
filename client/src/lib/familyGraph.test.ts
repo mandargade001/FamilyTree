@@ -1,4 +1,4 @@
-import { getParentIds, getChildIds, getSpouseIds, getSiblingIds } from './familyGraph'
+import { getParentIds, getChildIds, getSpouseIds, getSiblingIds, computeImmediateFamily } from './familyGraph'
 import type { Relationship } from '../types'
 
 // Anna & Ravi are Meera, Sanjay, and Deepak's parents. Sanjay married Priya.
@@ -43,4 +43,20 @@ test('getSiblingIds returns everyone sharing a parent, excluding self', () => {
 
 test('getSiblingIds returns an empty array for someone with no recorded parents', () => {
   expect(getSiblingIds('anna', relationships)).toEqual([])
+})
+
+test('computeImmediateFamily gathers parents, spouse, children, and siblings', () => {
+  const family = computeImmediateFamily('sanjay', relationships)
+  expect(family.parents.sort()).toEqual(['anna', 'ravi'])
+  expect(family.spouse).toBe('priya')
+  expect(family.children).toEqual([])
+  expect(family.siblings.sort()).toEqual(['deepak', 'meera'])
+})
+
+test('computeImmediateFamily handles someone with no spouse and no siblings', () => {
+  const family = computeImmediateFamily('rohan', relationships)
+  expect(family.parents).toEqual(['meera'])
+  expect(family.spouse).toBeNull()
+  expect(family.children).toEqual([])
+  expect(family.siblings).toEqual([])
 })

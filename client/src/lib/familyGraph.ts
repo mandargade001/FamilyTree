@@ -29,3 +29,20 @@ export function getSiblingIds(personId: string, relationships: Relationship[]): 
   }
   return [...siblingSet]
 }
+
+export interface ImmediateFamily {
+  parents: string[]
+  spouse: string | null
+  children: string[]
+  siblings: string[]
+}
+
+export function computeImmediateFamily(personId: string, relationships: Relationship[]): ImmediateFamily {
+  const spouses = getSpouseIds(personId, relationships)
+  return {
+    parents: getParentIds(personId, relationships),
+    spouse: spouses[0] ?? null,
+    children: getChildIds(personId, relationships),
+    siblings: getSiblingIds(personId, relationships),
+  }
+}
