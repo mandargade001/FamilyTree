@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import type { Person, Relationship } from '../../types'
-import { buildAncestorRows, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
-import { Couple } from './Couple'
+import { buildAncestorRows, computeImmediateFamily, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
+import { Couple, type PersonVisualState } from './Couple'
 import { SiblingFlap } from './SiblingFlap'
 import { AddParentSlot } from './AddParentSlot'
 import { CollapseToggle } from './CollapseToggle'
+
+const NEUTRAL_STATE: PersonVisualState = { inFocus: false, dimmed: false }
 
 interface TreeViewProps {
   people: Person[]
@@ -85,10 +87,22 @@ function DescendantBranch({
 
 export function TreeView({ people, relationships, focalId, onAddParent, onOpenProfile }: TreeViewProps) {
   const [openFlaps, setOpenFlaps] = useState<Set<string>>(new Set())
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [focusModeEnabled, setFocusModeEnabled] = useState(false)
   const byId = new Map(people.map((p) => [p.id, p]))
   const rows = buildAncestorRows(focalId, relationships)
   const focalChildren = getDescendantIds(focalId, relationships).filter((id) => byId.has(id))
-  const focusedSet = null as Set<string> | null // populated in Task 14
+
+  const focusedFamily = focusedId ? computeImmediateFamily(focusedId, relationships) : null
+  const focusedSet = focusedId && focusedFamily
+    ? new Set([
+        focusedId,
+        ...focusedFamily.parents,
+        ...(focusedFamily.spouse ? [focusedFamily.spouse] : []),
+        ...focusedFamily.children,
+        ...focusedFamily.siblings,
+      ])
+    : null
 
   function toggleFlap(personId: string) {
     setOpenFlaps((prev) => {
@@ -96,6 +110,59 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
       next.has(personId) ? next.delete(personId) : next.add(personId)
       return next
     })
+  }
+
+  // Auto-expand any flap (on either the anchor or spouse side of a row unit)
+  // whose contents overlap the newly focused family — e.g. focusing a
+  // parent should still auto-reveal that parent's *other children* even
+  // though those children aren't the parent's own "siblings"; checking
+  // against the full computed focus set (not just family.siblings) covers
+  // that case as well as the sibling-focused case.
+  function focusOn(personId: string) {
+    const family = computeImmediateFamily(personId, relationships)
+    const newFocusSet = new Set([
+      personId,
+      ...family.parents,
+      ...(family.spouse ? [family.spouse] : []),
+      ...family.children,
+      ...family.siblings,
+    ])
+    setOpenFlaps((prev) => {
+      const next = new Set(prev)
+      for (const row of rows) {
+        for (const unit of row.units) {
+          const owners = [unit.personId, unit.spouseId].filter((id): id is string => !!id)
+          for (const ownerId of owners) {
+            const siblingIds = getSiblingIds(ownerId, relationships)
+            if (siblingIds.some((s) => newFocusSet.has(s))) {
+              next.add(ownerId)
+            }
+          }
+        }
+      }
+      return next
+    })
+    setFocusedId(personId)
+  }
+
+  function clearFocus() {
+    setFocusedId(null)
+  }
+
+  function patchState(personId: string): PersonVisualState {
+    if (!focusedSet) return NEUTRAL_STATE
+    return { inFocus: focusedSet.has(personId), dimmed: !focusedSet.has(personId) }
+  }
+
+  // When Focus Mode is toggled on, a single click on a patch focuses that
+  // person instead of opening their profile; double-click always focuses,
+  // regardless of the toggle.
+  function handleOpen(personId: string) {
+    if (focusModeEnabled) {
+      focusOn(personId)
+    } else {
+      onOpenProfile(personId)
+    }
   }
 
   // For a given ancestor-row member (whether the row unit's anchor or their
@@ -115,7 +182,17 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           if (!sibling) return null
           const sibSpouseId = getSpouseIds(sibId, relationships)[0]
           const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) : null
-          return <Couple key={sibId} person={sibling} spouse={sibSpouse} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
+          return (
+            <Couple
+              key={sibId}
+              person={sibling}
+              spouse={sibSpouse}
+              onOpen={handleOpen}
+              onDoubleOpen={focusOn}
+              personState={patchState(sibId)}
+              spouseState={sibSpouse ? patchState(sibSpouse.id) : undefined}
+            />
+          )
         })}
       </div>
     )
@@ -123,6 +200,15 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
 
   return (
     <div className="tree">
+      {focusedId && (
+        <button className="exit-focus" onClick={clearFocus}>Exit focus</button>
+      )}
+      <button
+        className={`focus-mode-toggle${focusModeEnabled ? ' active' : ''}`}
+        onClick={() => setFocusModeEnabled((v) => !v)}
+      >
+        Focus Mode
+      </button>
       {focalChildren.length > 0 && (
         <div className="descendants">
           <div className="gen">
@@ -132,8 +218,8 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
                 personId={childId}
                 byId={byId}
                 relationships={relationships}
-                onOpenProfile={onOpenProfile}
-                onDoubleOpen={() => {}}
+                onOpenProfile={handleOpen}
+                onDoubleOpen={focusOn}
                 focusedSet={focusedSet}
                 defaultExpanded={false}
               />
@@ -170,7 +256,14 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
                     )}
                   </div>
                 )}
-                <Couple person={person} spouse={spouse} onOpen={onOpenProfile} onDoubleOpen={() => {}} />
+                <Couple
+                  person={person}
+                  spouse={spouse}
+                  onOpen={handleOpen}
+                  onDoubleOpen={focusOn}
+                  personState={patchState(unit.personId)}
+                  spouseState={spouse ? patchState(spouse.id) : undefined}
+                />
                 {anyHasSiblings && (
                   <div className="couple-slots">
                     <div className="person-slot">

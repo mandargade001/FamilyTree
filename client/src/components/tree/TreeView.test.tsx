@@ -135,3 +135,81 @@ test('shows a sibling flap for the spouse side of a couple, not just the anchor'
   fireEvent.click(screen.getByText('1 sibling'))
   expect(screen.getByText('RaviSibling')).toBeInTheDocument()
 })
+
+test('double-clicking a person focuses their immediate family and dims everyone else', () => {
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
+
+  expect(screen.getByText('Anna').closest('.patch')).toHaveClass('in-focus')
+  expect(screen.getByText('Ravi').closest('.patch')).toHaveClass('in-focus')
+  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+})
+
+test('focus mode auto-expands a collapsed sibling flap to reveal a focused sibling', () => {
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  fireEvent.doubleClick(screen.getByText('Anna').closest('.patch')!)
+  expect(screen.getByText('Sanjay')).toBeInTheDocument()
+  expect(screen.getByText('Sanjay').closest('.patch')).toHaveClass('in-focus')
+})
+
+test('Exit focus clears the focused state', () => {
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
+  fireEvent.click(screen.getByText('Exit focus'))
+  expect(screen.getByText('Meera').closest('.patch')).not.toHaveClass('in-focus')
+})
+
+test('double-clicking the focal person also glows their own children below them', () => {
+  const withChild = [...people, person('rohan', 'Rohan')]
+  const relsWithChild: Relationship[] = [...relationships, { id: 'r8', type: 'parent-child', from_id: 'meera', to_id: 'rohan' }]
+  render(<TreeView people={withChild} relationships={relsWithChild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
+  expect(screen.getByText('Rohan').closest('.patch')).toHaveClass('in-focus')
+})
+
+test('double-clicking the spouse side of the ancestor couple focuses the anchor side too', () => {
+  // Anna is the row unit's anchor (personId) and Ravi is the spouse
+  // (spouseId), per buildAncestorRows' ordering. Double-clicking Ravi's
+  // patch — the spouse side, not the anchor — must still glow Anna, proving
+  // Couple threads inFocus/dimmed independently to both sides.
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  fireEvent.doubleClick(screen.getByText('Ravi').closest('.patch')!)
+
+  expect(screen.getByText('Ravi').closest('.patch')).toHaveClass('in-focus')
+  expect(screen.getByText('Anna').closest('.patch')).toHaveClass('in-focus')
+  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+})
+
+test('focusing a sibling dims an unrelated person but not the sibling\'s own spouse, in the sibling list', () => {
+  // Sanjay (a sibling in meera's sibling flap) has his own spouse Priya —
+  // rendered via renderSiblingList's Couple call, a different call site from
+  // the main ancestor row. Priya must light up as in-focus (she's Sanjay's
+  // spouse) while Meera's own child Rohan — rendered but outside Sanjay's
+  // immediate family — stays dimmed, proving the sibling-list Couple call
+  // also threads personState/spouseState correctly rather than only
+  // handling the sibling anchor.
+  const extendedPeople = [...people, person('priya', 'Priya'), person('rohan', 'Rohan')]
+  const extendedRelationships: Relationship[] = [
+    ...relationships,
+    { id: 'r8', type: 'spouse', from_id: 'sanjay', to_id: 'priya' },
+    { id: 'r9', type: 'parent-child', from_id: 'meera', to_id: 'rohan' },
+  ]
+  render(<TreeView people={extendedPeople} relationships={extendedRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  fireEvent.click(screen.getByText('2 siblings'))
+  fireEvent.doubleClick(screen.getByText('Sanjay').closest('.patch')!)
+
+  expect(screen.getByText('Sanjay').closest('.patch')).toHaveClass('in-focus')
+  expect(screen.getByText('Priya').closest('.patch')).toHaveClass('in-focus')
+  expect(screen.getByText('Rohan').closest('.patch')).toHaveClass('dimmed')
+})
+
+test('the Focus Mode toggle makes a single click focus a person instead of opening their profile', () => {
+  const onOpenProfile = vi.fn()
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} />)
+  fireEvent.click(screen.getByText('Focus Mode'))
+  fireEvent.click(screen.getByText('Meera').closest('.patch')!)
+
+  expect(onOpenProfile).not.toHaveBeenCalled()
+  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+  expect(screen.getByText('Anna').closest('.patch')).toHaveClass('in-focus')
+})
