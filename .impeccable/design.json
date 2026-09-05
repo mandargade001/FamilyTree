@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-05T00:00:00Z",
+  "title": "Design System: Family Quilt",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Muslin Canvas", "canonical": "#EAE5D9", "tonalRamp": ["#211F1A", "#2A2721", "#4A4438", "#7A705F", "#A89A80", "#C9C0AE", "#EAE5D9", "#F5F1E7"] },
+      "patch": { "role": "neutral", "displayName": "Patch Fabric", "canonical": "#F5F1E7", "tonalRamp": ["#2A2721", "#302C25", "#4A4438", "#675E4C", "#A89A80", "#C9C0AE", "#EFE8DA", "#F5F1E7"] },
+      "patch-alt": { "role": "neutral", "displayName": "Patch Fabric Alt", "canonical": "#EFE8DA", "tonalRamp": ["#302C25", "#3A362D", "#4A4438", "#675E4C", "#A89A80", "#C9C0AE", "#EAE5D9", "#EFE8DA"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#2B2A26", "tonalRamp": ["#141310", "#211F1A", "#2B2A26", "#4A4438", "#675E4C", "#A79E8C", "#C9C0AE", "#EDE7DA"] },
+      "muted": { "role": "neutral", "displayName": "Muted Taupe", "canonical": "#7A705F", "tonalRamp": ["#2A2721", "#4A4438", "#675E4C", "#7A705F", "#A79E8C", "#A89A80", "#C9C0AE", "#EAE5D9"] },
+      "border": { "role": "neutral", "displayName": "Border", "canonical": "#C9C0AE", "tonalRamp": ["#302C25", "#4A4438", "#675E4C", "#A89A80", "#B7AC96", "#C9C0AE", "#DAD2C2", "#EAE5D9"] },
+      "border-strong": { "role": "neutral", "displayName": "Border Strong", "canonical": "#A89A80", "tonalRamp": ["#2A2721", "#4A4438", "#675E4C", "#8C8172", "#A89A80", "#BDB196", "#D2C7B2", "#EAE5D9"] },
+      "thread": { "role": "primary", "displayName": "Thread Indigo", "canonical": "#33436E", "tonalRamp": ["#131A2B", "#1F2A47", "#293759", "#33436E", "#4B5D8C", "#7188B6", "#93A6DB", "#DCE1EE"] },
+      "thread-soft": { "role": "primary", "displayName": "Thread Soft", "canonical": "#DCE1EE", "tonalRamp": ["#1F2A47", "#2B3550", "#3D4A6C", "#5A6C93", "#93A6DB", "#B9C5E4", "#DCE1EE", "#EEF1F7"] },
+      "thread-ink": { "role": "primary", "displayName": "Thread Ink", "canonical": "#1F2A47", "tonalRamp": ["#0D1220", "#1F2A47", "#293759", "#33436E", "#4B5D8C", "#7188B6", "#93A6DB", "#DCE4FA"] },
+      "stitch-new": { "role": "accent", "displayName": "Stitch Rust", "canonical": "#A85630", "tonalRamp": ["#3D1F12", "#4A2E22", "#6E3A22", "#A85630", "#C06D45", "#D98860", "#E7AE8E", "#F1DED2"] },
+      "stitch-new-soft": { "role": "accent", "displayName": "Stitch Rust Soft", "canonical": "#F1DED2", "tonalRamp": ["#4A2E22", "#6E3A22", "#8C4D30", "#A85630", "#C68A67", "#DDB59B", "#EBCFBD", "#F1DED2"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Profile name only — the single largest text role in the system." },
+      "title": { "displayName": "Title", "purpose": "Page/modal/gate headers." },
+      "name-label": { "displayName": "Patch Name", "purpose": "Person name inside a tree patch, smallest use of the display face." },
+      "body": { "displayName": "Body", "purpose": "Field values, bio, life-event text." },
+      "ui-text": { "displayName": "UI Text", "purpose": "Tabs, buttons, tool-tray labels." },
+      "label": { "displayName": "Section Label", "purpose": "Uppercase in-page content divider inside the profile screen only." }
+    },
+    "shadows": [
+      { "name": "resting", "value": "0 1px 2px rgba(43,42,38,.10)", "purpose": "Default separation of fabric/frame from canvas at rest." },
+      { "name": "lifted", "value": "0 6px 16px -4px rgba(43,42,38,.22), 0 2px 5px rgba(43,42,38,.10)", "purpose": "Hover state on patches and the primary button; combined with a Thread-Soft ring on the in-focus patch." }
+    ],
+    "motion": [
+      { "name": "fold-panel", "value": "grid-template-rows .38s cubic-bezier(.16,1,.3,1), opacity .3s ease", "purpose": "Signature sibling-flap unfold: grows from a folded zero-height state rather than a flat show/hide." },
+      { "name": "screen-fade", "value": ".35s cubic-bezier(.16,1,.3,1) fadein (opacity + translateY(4px))", "purpose": "Tab-switch screen transition; disabled under prefers-reduced-motion." },
+      { "name": "button-press", "value": "transform .12s ease scale(.97) on :active", "purpose": "Tactile press feedback on all buttons." }
+    ],
+    "breakpoints": [
+      { "name": "profile-stack", "value": "680px", "purpose": "Person Profile two-column layout collapses to one column below this width." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single most important action on a screen (Add Person, Save, Unlock editing).",
+      "html": "<button class=\"ds-btn-primary\">Add Person</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; gap:7px; height:38px; padding:0 15px; border-radius:8px; font-family:'Source Sans 3',sans-serif; font-weight:600; font-size:13px; background:#33436E; color:#fff; border:1px solid transparent; box-shadow:0 1px 2px rgba(43,42,38,.10); cursor:pointer; transition:transform .12s ease, box-shadow .12s ease; } .ds-btn-primary:hover { box-shadow:0 6px 16px -4px rgba(43,42,38,.22), 0 2px 5px rgba(43,42,38,.10); } .ds-btn-primary:active { transform:scale(.97); } .ds-btn-primary:focus-visible { outline:2px solid #33436E; outline-offset:2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary action; also doubles as a toggle (Focus Mode) with an .on selected state.",
+      "html": "<button class=\"ds-btn-ghost\">Focus Mode</button>",
+      "css": ".ds-btn-ghost { display:inline-flex; align-items:center; gap:7px; height:38px; padding:0 15px; border-radius:8px; font-family:'Source Sans 3',sans-serif; font-weight:600; font-size:13px; background:#F5F1E7; border:1px solid #A89A80; color:#2B2A26; cursor:pointer; transition:transform .12s ease, box-shadow .12s ease; } .ds-btn-ghost:hover { border-color:#33436E; color:#33436E; } .ds-btn-ghost.ds-on { background:#DCE1EE; border-color:#33436E; color:#1F2A47; } .ds-btn-ghost:focus-visible { outline:2px solid #33436E; outline-offset:2px; }"
+    },
+    {
+      "name": "Tree Patch",
+      "kind": "custom",
+      "refersTo": "patch-card",
+      "description": "Signature component: a fabric patch representing one person on the tree, with dashed stitch border, circular photo thumbnail, and optional fresh-stitch badge.",
+      "html": "<div class=\"ds-patch\"><div class=\"ds-thumb\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 21c0-4 4-6 8-6s8 2 8 6\"/></svg></div><div class=\"ds-name\">Meera Gade</div><div class=\"ds-years\">b. 1955</div><div class=\"ds-fresh-badge\" title=\"Recently edited\"></div></div>",
+      "css": ".ds-patch { width:126px; background:#F5F1E7; border:2px dashed #A89A80; border-radius:8px; padding:9px 8px 11px; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:0 1px 2px rgba(43,42,38,.10); position:relative; cursor:pointer; transition:box-shadow .2s ease, border-color .2s ease; } .ds-patch:hover { box-shadow:0 6px 16px -4px rgba(43,42,38,.22), 0 2px 5px rgba(43,42,38,.10); border-color:#33436E; } .ds-thumb { width:46px; height:46px; border-radius:50%; background:#EFE8DA; border:1px solid #C9C0AE; display:flex; align-items:center; justify-content:center; color:#7A705F; } .ds-name { font-family:'Bitter',serif; font-weight:600; font-size:12px; text-align:center; line-height:1.25; color:#2B2A26; } .ds-years { font-size:10.5px; color:#7A705F; font-variant-numeric:tabular-nums; } .ds-fresh-badge { position:absolute; top:-7px; right:-7px; width:16px; height:16px; border-radius:50%; background:#A85630; border:2px solid #EFE8DA; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Standard form field; solid border, color-shift focus, no glow.",
+      "html": "<div class=\"ds-form-row\"><label>First name <span class=\"ds-req\">*</span></label><input class=\"ds-field\" placeholder=\"e.g. Meera\"></div>",
+      "css": ".ds-form-row label { display:block; font-size:12px; font-weight:600; color:#7A705F; margin-bottom:6px; font-family:'Source Sans 3',sans-serif; } .ds-req { color:#A85630; } .ds-field { width:100%; background:#F5F1E7; border:1.5px solid #C9C0AE; border-radius:6px; height:38px; padding:0 12px; font-size:13.5px; color:#2B2A26; font-family:'Source Sans 3',sans-serif; } .ds-field::placeholder { color:#7A705F; } .ds-field:focus { border-color:#33436E; outline:none; }"
+    },
+    {
+      "name": "Relationship Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Dashed-bordered pill linking to a related person's profile; solid-bordered accent variant for the add action.",
+      "html": "<span class=\"ds-chip\">Parent &middot; Anna Gade</span> <span class=\"ds-chip ds-add\">+ Add relationship</span>",
+      "css": ".ds-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; margin:0 8px 8px 0; border-radius:16px; background:#F5F1E7; border:1.5px dashed #A89A80; font-size:12px; font-family:'Source Sans 3',sans-serif; color:#2B2A26; cursor:pointer; } .ds-chip:hover { border-color:#33436E; color:#33436E; } .ds-chip.ds-add { border-style:solid; background:#DCE1EE; border-color:#33436E; color:#1F2A47; }"
+    },
+    {
+      "name": "Screen Tab",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "Top-level underline-tab navigation between the app's five screens.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab ds-active\">Tree View</button><button class=\"ds-tab\">Person Profile</button></div>",
+      "css": ".ds-tabs { display:flex; gap:2px; border-bottom:2px solid #C9C0AE; } .ds-tab { font-family:'Source Sans 3',sans-serif; font-weight:600; font-size:13px; color:#7A705F; background:none; border:none; padding:10px 16px; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; } .ds-tab:hover { color:#2B2A26; } .ds-tab.ds-active { color:#33436E; border-bottom-color:#33436E; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Continuously-Pieced Quilt",
+    "overview": "Family Quilt renders the tree as literal textile: a warm linen canvas holds fabric patches (people), joined by stitched seams (relationships). It is a domestic, hand-assembled world, not a corporate org-chart or a cartoon family app — the build commits fully to this material metaphor rather than treating it as decoration on a generic card grid. Density stays low and calm: patches are compact (126px wide) but never cramped, generous canvas space surrounds the tree, and the palette stays muted and warm throughout so the single accent thread reads clearly against it.\n\nThe aesthetic philosophy is workaday craft, not preciousness: a slab serif (Bitter) carries names and headings while a plain sans (Source Sans 3) carries every data field, label, and body sentence — a legible pairing built for a wide-age, non-technical audience, not a display-face flourish. The build explicitly rejected a SaaS-pill-nav treatment and a travel-board-style highlight in favor of a full-region color commitment and a persistent \"fresh stitch\" marker, so the quilt metaphor governs color, shape, and motion together rather than sitting only in copy.",
+    "keyCharacteristics": [
+      "Linen canvas + fabric-patch cards, joined by dashed/stitched seam lines, never solid connector lines or arrows.",
+      "One committed indigo-thread accent for all interactive/selected states; rust is reserved exclusively for \"new/unseen\" marking.",
+      "Slab-serif names/headings over workhorse sans body — a legibility-first pairing, not a precious display face.",
+      "Soft ambient shadows only; no hard-offset/neobrutalist shadow language.",
+      "A native light/dark palette pair (prefers-color-scheme + data-theme override), both keeping the same warm-linen/indigo-thread relationship."
+    ],
+    "rules": [
+      { "name": "The One Thread Rule", "body": "Thread Indigo is the only color that means \"interactive, active, or selected.\" No other hue is introduced for links, toggles, or emphasis.", "section": "colors" },
+      { "name": "The Reserved Rust Rule", "body": "Stitch Rust appears only where something is new/unseen or required — never as a second decorative accent. If a screen needs another color to \"pop,\" that is a defect, not a reason to expand the palette.", "section": "colors" },
+      { "name": "The Two-Face Rule", "body": "Bitter is reserved for names and titles only; every label, button, field, and paragraph uses Source Sans 3. No component mixes the two faces for the same text role.", "section": "typography" },
+      { "name": "The Hover-Only Lift Rule", "body": "Nothing casts a deeper shadow at rest. Depth only appears in direct response to hover or focus state, reinforcing that the canvas itself is flat cloth, not a stack of physical layers.", "section": "elevation" },
+      { "name": "The Dashed Seam Rule", "body": "Any element representing fabric — a patch, a photo slot, an upload target, the sibling flap — takes a dashed border (1.5–2px dashed var(--border-strong)). Structural chrome (frame, tabs, result rows, form dividers) always takes a solid 1px border instead. A dashed border is reserved for \"this is cloth,\" never used decoratively on plain UI containers.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do use dashed borders only for fabric-representing elements (patches, photo slots, the sibling flap) — solid borders everywhere else.",
+      "Do keep Thread Indigo as the sole color for interactive/active/selected state across every screen.",
+      "Do reserve Stitch Rust strictly for \"new/unseen\" and \"required field\" signaling.",
+      "Do render relationships as dashed/dotted stitched seam lines (repeating linear-gradient), never as solid connector lines or arrowheads.",
+      "Do apply shadow only as a hover/focus response (Resting → Lifted), never as ambient depth on a static surface.",
+      "Do pair Bitter exclusively with names/titles and Source Sans 3 with everything else."
+    ],
+    "donts": [
+      "Don't introduce a second decorative accent color; if a screen needs a color to \"pop,\" reserve it for a real new/unseen or required-field case, or don't add it.",
+      "Don't use hard-offset/neobrutalist shadows — this world's depth language is soft and ambient-on-hover only.",
+      "Don't replace the dashed seam-line technique with solid lines, arrows, or a generic tree-connector graphic; the stitched-seam rendering is the core signature of the metaphor.",
+      "Don't promote the uppercase .section-title label style to a marketing eyebrow/kicker above page headlines — it is an in-page content divider only, observed at small scale (11px) inside a profile, not a hero device."
+    ]
+  }
+}
