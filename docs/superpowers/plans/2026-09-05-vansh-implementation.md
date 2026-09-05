@@ -322,7 +322,7 @@ git commit -m "Scaffold Vite/React client with Family Quilt design tokens"
 - [ ] **Step 1: Install and start PostgreSQL locally, create the dev database and roles**
 
 Run: `brew install postgresql@16`
-Run: `brew services start postgresql@16`
+Run: `pg_ctl -D /opt/homebrew/var/postgresql@16 start` (`brew services start postgresql@16` reports success without actually starting the server in this sandbox — use `pg_ctl` directly, and reuse this exact command any time a later task finds Postgres not running)
 Run: `createdb vansh_dev`
 Run: `psql vansh_dev -c "create role anon nologin; create role authenticated nologin;"` — one-time, local-only. These exact role names (`anon`, `authenticated`) already exist in any real Supabase project; creating them locally means the same migration SQL (which only ever `grant`s to these names) works unchanged in both places.
 
@@ -362,7 +362,7 @@ create index relationships_to_id_idx on relationships(to_id);
 
 - [ ] **Step 3: Apply the migration and verify the tables exist**
 
-Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done` (this is the standard way every later task applies new migrations too — always re-run the whole loop, it's idempotent-safe since each task only adds new files)
+Run: `psql vansh_dev -f supabase/migrations/0001_init_schema.sql` (apply migrations one file at a time by explicit name — a shell `for` loop over `supabase/migrations/*.sql` was refused by this sandbox's command policy; every later task names its own new migration file explicitly the same way). If `psql` cannot connect, Postgres likely isn't running: start it with `pg_ctl -D /opt/homebrew/var/postgresql@16 start` (`brew services start` reports success without actually starting the server in this sandbox).
 Run: `psql vansh_dev -c "select table_name from information_schema.tables where table_schema = 'public' order by table_name;"`
 Expected output includes: `people`, `relationships`
 
@@ -565,7 +565,7 @@ grant execute on function verify_passphrase(text) to anon, authenticated;
 
 - [ ] **Step 4: Apply the migration and run the tests**
 
-Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done`
+Run: `psql vansh_dev -f supabase/migrations/0002_rls_and_passphrase.sql` (apply this one file by name). If `psql` cannot connect, start Postgres with `pg_ctl -D /opt/homebrew/var/postgresql@16 start`.
 Run: `cd supabase && npm test`
 Expected: PASS (3 tests)
 
@@ -731,7 +731,7 @@ grant execute on function update_person(text, uuid, text, text, text, text, text
 
 - [ ] **Step 4: Apply and run the tests**
 
-Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done`
+Run: `psql vansh_dev -f supabase/migrations/0003_rpc_functions.sql` (apply this one file by name). If `psql` cannot connect, start Postgres with `pg_ctl -D /opt/homebrew/var/postgresql@16 start`.
 Run: `cd supabase && npm test`
 Expected: PASS (7 tests)
 
@@ -826,7 +826,7 @@ grant execute on function delete_relationship(text, uuid) to anon, authenticated
 
 - [ ] **Step 3: Apply the migration**
 
-Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done`
+Run: `psql vansh_dev -f supabase/migrations/0003_rpc_functions.sql` (re-apply the same file — it now also contains this task's `delete_person`/`delete_relationship` additions; every statement in it is safely re-runnable: `create or replace function` and `grant` are both idempotent). If `psql` cannot connect, start Postgres with `pg_ctl -D /opt/homebrew/var/postgresql@16 start`.
 
 - [ ] **Step 4: Run the tests once Task 6's `add_relationship` also exists, verify pass**
 
@@ -954,7 +954,7 @@ grant execute on function add_relationship(text, text, uuid, uuid) to anon, auth
 
 - [ ] **Step 4: Apply the migration and run all Supabase tests**
 
-Run: `for f in supabase/migrations/*.sql; do psql vansh_dev -f "$f"; done`
+Run: `psql vansh_dev -f supabase/migrations/0003_rpc_functions.sql` (re-apply the same file — it now also contains this task's `add_relationship` addition). If `psql` cannot connect, start Postgres with `pg_ctl -D /opt/homebrew/var/postgresql@16 start`.
 Run: `cd supabase && npm test`
 Expected: PASS (all tests across Tasks 3–6, including the Task 5 tests that depended on this function)
 
