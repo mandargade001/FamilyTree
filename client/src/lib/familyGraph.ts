@@ -46,3 +46,42 @@ export function computeImmediateFamily(personId: string, relationships: Relation
     siblings: getSiblingIds(personId, relationships),
   }
 }
+
+export interface AncestorUnit {
+  personId: string
+  spouseId: string | null
+}
+
+export interface AncestorRow {
+  depth: number
+  units: AncestorUnit[]
+}
+
+export function buildAncestorRows(focalId: string, relationships: Relationship[]): AncestorRow[] {
+  const rows: AncestorRow[] = [{ depth: 0, units: [{ personId: focalId, spouseId: getSpouseIds(focalId, relationships)[0] ?? null }] }]
+
+  let currentIds = [focalId]
+  let depth = 0
+
+  while (currentIds.length > 0) {
+    depth += 1
+    const seenParentIds = new Set<string>()
+    const units: AncestorUnit[] = []
+
+    for (const id of currentIds) {
+      for (const parentId of getParentIds(id, relationships)) {
+        if (seenParentIds.has(parentId)) continue
+        const spouseId = getSpouseIds(parentId, relationships)[0] ?? null
+        if (spouseId) seenParentIds.add(spouseId)
+        seenParentIds.add(parentId)
+        units.push({ personId: parentId, spouseId })
+      }
+    }
+
+    if (units.length === 0) break
+    rows.push({ depth, units })
+    currentIds = units.flatMap((u) => (u.spouseId ? [u.personId, u.spouseId] : [u.personId]))
+  }
+
+  return rows
+}

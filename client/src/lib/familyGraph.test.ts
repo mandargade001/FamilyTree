@@ -1,4 +1,4 @@
-import { getParentIds, getChildIds, getSpouseIds, getSiblingIds, computeImmediateFamily } from './familyGraph'
+import { getParentIds, getChildIds, getSpouseIds, getSiblingIds, computeImmediateFamily, buildAncestorRows } from './familyGraph'
 import type { Relationship } from '../types'
 
 // Anna & Ravi are Meera, Sanjay, and Deepak's parents. Sanjay married Priya.
@@ -59,4 +59,31 @@ test('computeImmediateFamily handles someone with no spouse and no siblings', ()
   expect(family.spouse).toBeNull()
   expect(family.children).toEqual([])
   expect(family.siblings).toEqual([])
+})
+
+test('buildAncestorRows returns the focal person alone at depth 0', () => {
+  const rows = buildAncestorRows('meera', relationships)
+  expect(rows[0]).toEqual({ depth: 0, units: [{ personId: 'meera', spouseId: null }] })
+})
+
+test('buildAncestorRows walks up through recorded parent couples', () => {
+  const rows = buildAncestorRows('meera', relationships)
+  // depth 1: Meera's parents, Anna & Ravi, as one couple unit
+  const depth1 = rows.find((r) => r.depth === 1)!
+  expect(depth1.units).toEqual([{ personId: 'anna', spouseId: 'ravi' }])
+})
+
+test('buildAncestorRows stops at a generation with no recorded parents', () => {
+  const rows = buildAncestorRows('meera', relationships)
+  // Anna and Ravi have no recorded parents, so there is no depth 2 row
+  expect(rows.some((r) => r.depth === 2)).toBe(false)
+})
+
+test('buildAncestorRows handles someone with only one recorded parent', () => {
+  const oneParent: Relationship[] = [
+    { id: 'x1', type: 'parent-child', from_id: 'solo-parent', to_id: 'solo-child' },
+  ]
+  const rows = buildAncestorRows('solo-child', oneParent)
+  const depth1 = rows.find((r) => r.depth === 1)!
+  expect(depth1.units).toEqual([{ personId: 'solo-parent', spouseId: null }])
 })
