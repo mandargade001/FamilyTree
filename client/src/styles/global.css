@@ -17,6 +17,6 @@ body {
 .form-row { margin-bottom: var(--space-lg); }
 .form-row label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: var(--space-xs); }
 .req { color: var(--stitch-new); }
-.field { width: 100%; background: var(--patch); border: 1.5px solid var(--border); border-radius: var(--radius-xs); height: 38px; padding: 0 12px; font-size: 13.5px; color: var(--ink); font-family: inherit; }
+.field { width: 100%; background: var(--patch); border: 1.5px solid var(--border); border-radius: var(--radius-xs); height: 38px; padding: 0 var(--space-md); font-size: 13.5px; color: var(--ink); font-family: inherit; }
 .field:focus { border-color: var(--thread); outline: none; }
 textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
