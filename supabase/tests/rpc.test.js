@@ -75,3 +75,48 @@ test('update_person changes fields on an existing person', async () => {
   const { data: row } = await supabase.from('people').select('*').eq('id', id).single()
   assert.equal(row.occupation, 'Engineer')
 })
+
+test('add_person rejects a null passphrase', async () => {
+  const { error } = await supabase.rpc('add_person', {
+    p_passphrase: null,
+    p_first_name: 'NullPassTest',
+  })
+  assert.ok(error, 'expected add_person to reject null passphrase')
+})
+
+test('update_person rejects a null passphrase', async () => {
+  const { data: id } = await supabase.rpc('add_person', {
+    p_passphrase: 'changeme',
+    p_first_name: 'UpdateTest',
+  })
+  const { error } = await supabase.rpc('update_person', {
+    p_passphrase: null,
+    p_id: id,
+    p_first_name: 'UpdateTest',
+  })
+  assert.ok(error, 'expected update_person to reject null passphrase')
+})
+
+test('update_person rejects a wrong (non-null) passphrase', async () => {
+  const { data: id } = await supabase.rpc('add_person', {
+    p_passphrase: 'changeme',
+    p_first_name: 'PassphraseTest',
+  })
+  const { error } = await supabase.rpc('update_person', {
+    p_passphrase: 'wrongpassphrase',
+    p_id: id,
+    p_first_name: 'PassphraseTest',
+  })
+  assert.ok(error, 'expected update_person to reject wrong passphrase')
+})
+
+test('update_person rejects a nonexistent person id', async () => {
+  const fakeId = '00000000-0000-0000-0000-000000000000'
+  const { error } = await supabase.rpc('update_person', {
+    p_passphrase: 'changeme',
+    p_id: fakeId,
+    p_first_name: 'NoOne',
+  })
+  assert.ok(error, 'expected update_person to reject nonexistent person id')
+  assert.match(error.message, /person not found/i)
+})

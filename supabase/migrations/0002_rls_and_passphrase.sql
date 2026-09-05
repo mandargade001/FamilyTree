@@ -35,6 +35,9 @@ as $$
 declare
   v_hash text;
 begin
+  if p_passphrase is null then
+    return false;
+  end if;
   select value into v_hash from app_config where key = 'passphrase_hash';
   if v_hash is null then
     return false;
