@@ -57,9 +57,11 @@ A single continuous session covering the entire arc from initial idea to a live,
 **Asked:** Execute the plan, subagent-driven.
 
 **Done:** Set up an isolated git worktree and ran the full subagent-driven-development loop — one implementer subagent per task, one task reviewer per task, fix-and-re-review loops where findings surfaced. Notable events:
+- **Task 1**: `node_modules` was accidentally committed (no `.gitignore` existed yet) — caught immediately, fixed with a `.gitignore` before review.
 - **Task 2 blocked**: Docker/Supabase CLI unavailable (sandbox container policy). Pivoted the entire local database-testing approach to a native local PostgreSQL install + a `pg`-backed shim mimicking the real Supabase client, after confirming with the user. Discovered and worked around several sandbox-specific quirks (non-default Postgres port, `brew services` not actually starting the server, shell `for` loops refused by the sandbox).
 - **Task 3**: implementer correctly added a table-level GRANT the plan's literal SQL omitted, to make local Postgres parity work — verified as a legitimate fix, not a security hole, by the task reviewer.
 - **Task 4**: reviewer caught a **real security bug** — a NULL passphrase bypassed `verify_passphrase()` entirely (Postgres `crypt(NULL, hash)` returns NULL, and `if not <NULL>` in PL/pgSQL is falsy, skipping the rejection). Fixed at the root cause.
+- **Task 10**: implementer flagged that `client/tsconfig.json` had never been created (a real gap from Task 1 — `npm run build` would have failed the first time anyone ran it). Fixed in the same task rather than deferred.
 - **Task 13** (TreeView, the largest task): implementer self-caught a depth-asymmetry bug in the "Add Parent" slot logic; review then caught a second, more serious **couple-anchor asymmetry** bug (the fix only checked one side of every ancestor couple) — fixed with independent per-side rendering.
 - **Task 14** (focus mode): brief text was stale after Task 13's refactor; implementer correctly adapted rather than pasting stale code, and avoided reintroducing the couple-asymmetry bug class.
 - **Task 16** (PersonForm): reviewer caught a real crash risk (clearing the first-name field could set it to `null`, then crash on `.trim()`).
