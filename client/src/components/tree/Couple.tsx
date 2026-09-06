@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Person } from '../../types'
+import { isFresh } from '../../lib/freshness'
 import { PersonPatch } from './PersonPatch'
 import { SeamLine } from './SeamLine'
 
@@ -34,11 +35,11 @@ export function Couple({
 }: CoupleProps) {
   return (
     <div className="couple">
-      <PersonPatch person={person} {...personState} fresh={false} onOpen={onOpen} onDoubleOpen={onDoubleOpen} />
+      <PersonPatch person={person} {...personState} fresh={isFresh(person)} onOpen={onOpen} onDoubleOpen={onDoubleOpen} />
       {spouse && (
         <>
           <SeamLine kind="spouse" />
-          <PersonPatch person={spouse} {...spouseState} fresh={false} onOpen={onOpen} onDoubleOpen={onDoubleOpen} />
+          <PersonPatch person={spouse} {...spouseState} fresh={isFresh(spouse)} onOpen={onOpen} onDoubleOpen={onDoubleOpen} />
         </>
       )}
       {children}

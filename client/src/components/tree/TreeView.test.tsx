@@ -2,11 +2,11 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { TreeView } from './TreeView'
 import type { Person, Relationship } from '../../types'
 
-function person(id: string, first: string): Person {
+function person(id: string, first: string, updatedAt = ''): Person {
   return {
     id, first_name: first, last_name: null, gender: null, birth_date: null,
     death_date: null, birth_place: null, occupation: null, bio: null,
-    created_at: '', updated_at: '',
+    created_at: '', updated_at: updatedAt,
   }
 }
 
@@ -257,6 +257,34 @@ test('clicking a patch while focused does not clear focus via the background han
 
   expect(onOpenProfile).toHaveBeenCalledWith('anna')
   expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+})
+
+test('shows the fresh-stitch badge for a recently-updated person and not for a stale one, on both sides of a couple', () => {
+  // Anna (the row unit's anchor) was just edited; Ravi (her spouse) was
+  // edited long ago. Both sides of a couple must get independently computed
+  // freshness — this project has a documented history of "only fixed for one
+  // side of a couple" bugs.
+  const now = new Date('2026-09-06T12:00:00.000Z')
+  vi.useFakeTimers()
+  vi.setSystemTime(now)
+  const freshAt = new Date(now.getTime() - 60 * 1000).toISOString() // 1 minute ago
+  const staleAt = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString() // 2 hours ago
+  const freshPeople = [
+    person('anna', 'Anna', freshAt),
+    person('ravi', 'Ravi', staleAt),
+    person('meera', 'Meera', staleAt),
+    person('sanjay', 'Sanjay', staleAt),
+    person('deepak', 'Deepak', staleAt),
+  ]
+  try {
+    render(<TreeView people={freshPeople} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+
+    expect(screen.getByText('Anna').closest('.patch')!.querySelector('.fresh-badge')).toBeInTheDocument()
+    expect(screen.getByText('Ravi').closest('.patch')!.querySelector('.fresh-badge')).not.toBeInTheDocument()
+    expect(screen.getByText('Meera').closest('.patch')!.querySelector('.fresh-badge')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('the Focus Mode toggle makes a single click focus a person instead of opening their profile', () => {
