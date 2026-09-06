@@ -29,6 +29,7 @@ function baseProps(overrides: Partial<Parameters<typeof PersonProfile>[0]> = {})
     onOpenPerson: noop,
     onCenterHere: noop,
     onDelete: noop,
+    onClose: noop,
     onUploadPhoto: async () => ({ ok: true as const }),
     ...overrides,
   }
@@ -74,6 +75,13 @@ test('Center tree here calls onCenterHere', () => {
   render(<PersonProfile {...baseProps({ onCenterHere })} />)
   fireEvent.click(screen.getByText('Center tree here'))
   expect(onCenterHere).toHaveBeenCalledOnce()
+})
+
+test('clicking the close button calls onClose', () => {
+  const onClose = vi.fn()
+  render(<PersonProfile {...baseProps({ onClose })} />)
+  fireEvent.click(screen.getByLabelText('Close profile'))
+  expect(onClose).toHaveBeenCalledOnce()
 })
 
 test('Delete asks for confirmation showing the relationship count, and calls onDelete when confirmed', () => {

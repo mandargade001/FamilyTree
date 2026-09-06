@@ -16,6 +16,7 @@ interface PersonProfileProps {
   onOpenPerson: (id: string) => void
   onCenterHere: () => void
   onDelete: () => void
+  onClose: () => void
   onUploadPhoto: (file: File) => Promise<UploadResult>
 }
 
@@ -28,6 +29,7 @@ export function PersonProfile({
   onOpenPerson,
   onCenterHere,
   onDelete,
+  onClose,
   onUploadPhoto,
 }: PersonProfileProps) {
   const byId = new Map(people.map((p) => [p.id, p]))
@@ -83,6 +85,9 @@ export function PersonProfile({
 
   return (
     <div className="profile-layout">
+      <button className="profile-close" onClick={onClose} aria-label="Close profile">
+        <Icon name="close" size={16} />
+      </button>
       <div>
         <div className="profile-photo">
           {photos[0] ? <img src={photos[0]} alt={`${name || 'Profile'} photo`} /> : <Icon name="photo" size={28} />}
