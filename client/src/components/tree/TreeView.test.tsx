@@ -2,6 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { TreeView } from './TreeView'
 import type { Person, Relationship } from '../../types'
 
+vi.mock('../../api/photos', () => ({ getPrimaryPhoto: vi.fn().mockResolvedValue(null) }))
+
 function person(id: string, first: string, updatedAt = ''): Person {
   return {
     id, first_name: first, last_name: null, gender: null, birth_date: null,

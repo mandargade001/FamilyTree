@@ -35,3 +35,12 @@ export async function listPhotos(personId: string): Promise<string[]> {
     .filter((entry) => entry.name)
     .map((entry) => supabase.storage.from('photos').getPublicUrl(`${personId}/${entry.name}`).data.publicUrl)
 }
+
+// Lighter than listPhotos() for the tree's collapsed card thumbnail, which
+// only ever needs the single most-recent photo, not the full gallery —
+// `limit: 1` avoids fetching every filename in the folder just to use one.
+export async function getPrimaryPhoto(personId: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from('photos').list(personId, { limit: 1 })
+  if (error || !data || data.length === 0 || !data[0].name) return null
+  return supabase.storage.from('photos').getPublicUrl(`${personId}/${data[0].name}`).data.publicUrl
+}

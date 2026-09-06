@@ -16,7 +16,7 @@ vi.mock('../lib/supabaseClient', () => ({
   },
 }))
 
-import { uploadPhoto, listPhotos } from './photos'
+import { uploadPhoto, listPhotos, getPrimaryPhoto } from './photos'
 
 test('uploadPhoto invokes the upload-photo function with a FormData payload', async () => {
   mockInvoke.mockResolvedValue({ data: { path: 'meera/photo.jpg' }, error: null })
@@ -66,4 +66,24 @@ test('listPhotos returns an empty array when the folder does not exist yet', asy
 test('listPhotos returns an empty array instead of throwing when listing fails', async () => {
   mockList.mockResolvedValue({ data: null, error: new Error('boom') })
   await expect(listPhotos('meera')).resolves.toEqual([])
+})
+
+test('getPrimaryPhoto requests only one entry and returns its public URL', async () => {
+  mockList.mockResolvedValue({ data: [{ name: 'a.jpg' }], error: null })
+  mockGetPublicUrl.mockImplementation((path: string) => ({ data: { publicUrl: `https://cdn.example/${path}` } }))
+
+  const url = await getPrimaryPhoto('meera')
+
+  expect(mockList).toHaveBeenCalledWith('meera', { limit: 1 })
+  expect(url).toBe('https://cdn.example/meera/a.jpg')
+})
+
+test('getPrimaryPhoto returns null when the person has no photos', async () => {
+  mockList.mockResolvedValue({ data: [], error: null })
+  await expect(getPrimaryPhoto('nobody')).resolves.toBeNull()
+})
+
+test('getPrimaryPhoto returns null instead of throwing when listing fails', async () => {
+  mockList.mockResolvedValue({ data: null, error: new Error('boom') })
+  await expect(getPrimaryPhoto('meera')).resolves.toBeNull()
 })
