@@ -21,12 +21,18 @@ interface RelationshipPickerProps {
 const TYPES: PickKind[] = ['parent', 'child', 'spouse']
 const LABELS: Record<PickKind, string> = { parent: 'Parent', child: 'Child', spouse: 'Spouse' }
 
+// Same first + last name combination used in the result row, so search
+// matches whatever the user actually sees (including a last-name-only query).
+function displayName(p: Person): string {
+  return p.last_name ? `${p.first_name} ${p.last_name}` : p.first_name
+}
+
 export function RelationshipPicker({ anchorPerson, people, onLinkExisting, onCreateNew, onCancel }: RelationshipPickerProps) {
   const [type, setType] = useState<PickKind>('parent')
   const [search, setSearch] = useState('')
 
   const results = people.filter(
-    (p) => p.id !== anchorPerson.id && p.first_name.toLowerCase().includes(search.toLowerCase()) && search.length > 0,
+    (p) => p.id !== anchorPerson.id && search.length > 0 && displayName(p).toLowerCase().includes(search.toLowerCase()),
   )
 
   return (
@@ -51,7 +57,7 @@ export function RelationshipPicker({ anchorPerson, people, onLinkExisting, onCre
           {results.map((p) => (
             <div className="result-row" key={p.id} onClick={() => onLinkExisting(type, p.id)}>
               <div className="result-avatar"><Icon name="photo" size={14} /></div>
-              <div>{p.first_name}</div>
+              <div>{displayName(p)}</div>
             </div>
           ))}
         </div>

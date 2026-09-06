@@ -2,12 +2,12 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { RelationshipPicker } from './RelationshipPicker'
 import type { Person } from '../../types'
 
-function person(id: string, first: string): Person {
-  return { id, first_name: first, last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' }
+function person(id: string, first: string, last: string | null = null): Person {
+  return { id, first_name: first, last_name: last, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' }
 }
 
 const anchor = person('meera', 'Meera')
-const people = [anchor, person('deepak', 'Deepak'), person('priya', 'Priya')]
+const people = [anchor, person('deepak', 'Deepak'), person('priya', 'Priya'), person('rakesh', 'Rakesh', 'Verma')]
 
 test('filters the result list as the search text changes', () => {
   render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={() => {}} />)
@@ -44,6 +44,13 @@ test('shows a create-new row with the current search text', () => {
   render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={() => {}} />)
   fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Kiran' } })
   expect(screen.getByText('Create new person "Kiran"')).toBeInTheDocument()
+})
+
+test('searching by last name finds the matching person', () => {
+  render(<RelationshipPicker anchorPerson={anchor} people={people} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={() => {}} />)
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Verma' } })
+  expect(screen.getByText('Rakesh Verma')).toBeInTheDocument()
+  expect(screen.queryByText('Deepak')).not.toBeInTheDocument()
 })
 
 test('clicking Cancel calls onCancel', () => {
