@@ -22,6 +22,16 @@ create table app_config (
   value text not null
 );
 
+-- Hosted Supabase installs pgcrypto into the `extensions` schema, not `public`
+-- (locally it happens to land in `public`, which is why this worked without
+-- qualification during local development). This is a raw top-level statement,
+-- not inside a function, so it doesn't inherit any function's search_path —
+-- widen the session's search_path for this migration so crypt()/gen_salt()
+-- resolve in either location. Listing a schema that doesn't exist (as
+-- `extensions` won't, on a fresh local database) is not an error in Postgres;
+-- it's simply skipped during name resolution.
+set search_path = public, extensions;
+
 -- Deploy-time value: replace via
 --   update app_config set value = crypt('<real passphrase>', gen_salt('bf')) where key = 'passphrase_hash';
 insert into app_config (key, value) values ('passphrase_hash', crypt('changeme', gen_salt('bf')));

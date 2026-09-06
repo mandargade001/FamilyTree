@@ -78,8 +78,10 @@ VITE_SUPABASE_URL=<your project URL> VITE_SUPABASE_ANON_KEY=<your anon key> npm 
    ```
 3. **Set the real family passphrase** via the Supabase SQL Editor:
    ```sql
+   set search_path = public, extensions;
    update app_config set value = crypt('<a real passphrase>', gen_salt('bf')) where key = 'passphrase_hash';
    ```
+   (The `set search_path` line is needed because hosted Supabase installs the `pgcrypto` extension — which provides `crypt`/`gen_salt` — into an `extensions` schema rather than `public`.)
 4. **Create a public `photos` storage bucket** (Storage → New bucket, name it `photos`, public read).
 5. **Deploy the Edge Function:**
    ```bash
