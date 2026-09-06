@@ -273,6 +273,40 @@ test('delete_relationship rejects the wrong passphrase and leaves the row intact
   assert.ok(row)
 })
 
+test('add_relationship rejects a reversed duplicate spouse pair', async () => {
+  const { data: aId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Spouse A' })
+  const { data: bId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Spouse B' })
+
+  const first = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'spouse', p_from_id: aId, p_to_id: bId,
+  })
+  assert.equal(first.error, null, 'expected the original spouse pairing to succeed')
+  assert.ok(first.data)
+
+  const reversed = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'spouse', p_from_id: bId, p_to_id: aId,
+  })
+  assert.ok(reversed.error, 'expected the reversed spouse pairing to be rejected')
+  assert.match(reversed.error.message, /this spousal relationship already exists/i)
+})
+
+test('the reversed-spouse check does not leak into parent-child relationships between the same pair', async () => {
+  const { data: aId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Cross A' })
+  const { data: bId } = await supabase.rpc('add_person', { p_passphrase: 'changeme', p_first_name: 'Cross B' })
+
+  const spouse = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'spouse', p_from_id: aId, p_to_id: bId,
+  })
+  assert.equal(spouse.error, null)
+
+  // A "reversed" parent-child pair between the same two people must still be allowed —
+  // the spouse-specific reverse check must not affect parent-child at all.
+  const parentChild = await supabase.rpc('add_relationship', {
+    p_passphrase: 'changeme', p_type: 'parent-child', p_from_id: bId, p_to_id: aId,
+  })
+  assert.equal(parentChild.error, null, 'expected the parent-child edge to succeed despite the existing spouse edge')
+})
+
 test('delete_relationship rejects a nonexistent relationship id', async () => {
   const fakeId = '00000000-0000-0000-0000-000000000000'
   const { error } = await supabase.rpc('delete_relationship', { p_passphrase: 'changeme', p_id: fakeId })
