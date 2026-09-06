@@ -193,7 +193,13 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     return getSiblingIds(personId, relationships).filter((id) => byId.has(id))
   }
 
-  function renderSiblingColumns(ids: string[]) {
+  // Sibling columns render only a Couple, with nothing above it. The owner's
+  // own column can have a `.couple-slots` Add-Parent row above its Couple
+  // (see `anyMissingParent` below) — when it does, every sibling column in
+  // the same `.gen` row needs a same-height reserved spacer above its Couple
+  // too, or `align-items: flex-start` on `.gen` leaves the owner's Couple
+  // sitting visibly lower than the siblings', undoing Task 3's fix.
+  function renderSiblingColumns(ids: string[], reserveTopSlot: boolean) {
     return ids.map((sibId) => {
       const sibling = byId.get(sibId)
       if (!sibling) return null
@@ -201,6 +207,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
       const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) : null
       return (
         <div className="gen-column" key={sibId}>
+          {reserveTopSlot && <div className="sibling-slot-reserve" aria-hidden="true" />}
           <Couple
             person={sibling}
             spouse={sibSpouse}
@@ -306,8 +313,8 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
                     </div>
                   )}
                 </div>
-                {personSiblingIds.length > 0 && openFlaps.has(unit.personId) && renderSiblingColumns(personSiblingIds)}
-                {spouse && spouseSiblingIds.length > 0 && openFlaps.has(spouse.id) && renderSiblingColumns(spouseSiblingIds)}
+                {personSiblingIds.length > 0 && openFlaps.has(unit.personId) && renderSiblingColumns(personSiblingIds, anyMissingParent)}
+                {spouse && spouseSiblingIds.length > 0 && openFlaps.has(spouse.id) && renderSiblingColumns(spouseSiblingIds, anyMissingParent)}
               </Fragment>
             )
           })}
