@@ -36,11 +36,18 @@ test('siblings start collapsed behind a flap showing the correct count', () => {
   expect(screen.queryByText('Sanjay')).not.toBeInTheDocument()
 })
 
-test('clicking the sibling flap reveals the siblings', () => {
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+test('clicking the sibling flap reveals the siblings as row-adjacent columns, not nested under the owner', () => {
+  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
   fireEvent.click(screen.getByText('2 siblings'))
   expect(screen.getByText('Sanjay')).toBeInTheDocument()
   expect(screen.getByText('Deepak')).toBeInTheDocument()
+
+  const meeraColumn = screen.getByText('Meera').closest('.gen-column')!
+  const sanjayColumn = screen.getByText('Sanjay').closest('.gen-column')!
+  expect(sanjayColumn).not.toBe(meeraColumn)
+  expect(sanjayColumn.parentElement).toBe(meeraColumn.parentElement)
+  expect(meeraColumn.parentElement).toHaveClass('gen')
+  expect(container.querySelector('.sibling-list')).not.toBeInTheDocument()
 })
 
 test('shows an Add Parent slot above a person with no recorded parents', () => {

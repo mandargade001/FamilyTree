@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { Fragment, useEffect, useState, type MouseEvent } from 'react'
 import type { Person, Relationship } from '../../types'
 import { buildAncestorRows, computeImmediateFamily, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
 import { Couple, type PersonVisualState } from './Couple'
@@ -193,28 +193,25 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     return getSiblingIds(personId, relationships).filter((id) => byId.has(id))
   }
 
-  function renderSiblingList(ids: string[]) {
-    return (
-      <div className="gen sibling-list">
-        {ids.map((sibId) => {
-          const sibling = byId.get(sibId)
-          if (!sibling) return null
-          const sibSpouseId = getSpouseIds(sibId, relationships)[0]
-          const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) : null
-          return (
-            <Couple
-              key={sibId}
-              person={sibling}
-              spouse={sibSpouse}
-              onOpen={handleOpen}
-              onDoubleOpen={focusOn}
-              personState={patchState(sibId)}
-              spouseState={sibSpouse ? patchState(sibSpouse.id) : undefined}
-            />
-          )
-        })}
-      </div>
-    )
+  function renderSiblingColumns(ids: string[]) {
+    return ids.map((sibId) => {
+      const sibling = byId.get(sibId)
+      if (!sibling) return null
+      const sibSpouseId = getSpouseIds(sibId, relationships)[0]
+      const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) : null
+      return (
+        <div className="gen-column" key={sibId}>
+          <Couple
+            person={sibling}
+            spouse={sibSpouse}
+            onOpen={handleOpen}
+            onDoubleOpen={focusOn}
+            personState={patchState(sibId)}
+            spouseState={sibSpouse ? patchState(sibSpouse.id) : undefined}
+          />
+        </div>
+      )
+    })
   }
 
   return (
@@ -262,54 +259,56 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
             const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
 
             return (
-              <div className="gen-column" key={unit.personId}>
-                {anyMissingParent && (
-                  <div className="couple-slots">
-                    <div className="person-slot">
-                      {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
-                    </div>
-                    {spouse && (
+              <Fragment key={unit.personId}>
+                <div className="gen-column">
+                  {anyMissingParent && (
+                    <div className="couple-slots">
                       <div className="person-slot">
-                        {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
+                        {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
                       </div>
-                    )}
-                  </div>
-                )}
-                <Couple
-                  person={person}
-                  spouse={spouse}
-                  onOpen={handleOpen}
-                  onDoubleOpen={focusOn}
-                  personState={patchState(unit.personId)}
-                  spouseState={spouse ? patchState(spouse.id) : undefined}
-                />
-                {anyHasSiblings && (
-                  <div className="couple-slots">
-                    <div className="person-slot">
-                      {personSiblingIds.length > 0 && (
-                        <SiblingFlap
-                          count={personSiblingIds.length}
-                          open={openFlaps.has(unit.personId)}
-                          onToggle={() => toggleFlap(unit.personId)}
-                        />
+                      {spouse && (
+                        <div className="person-slot">
+                          {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
+                        </div>
                       )}
                     </div>
-                    {spouse && (
+                  )}
+                  <Couple
+                    person={person}
+                    spouse={spouse}
+                    onOpen={handleOpen}
+                    onDoubleOpen={focusOn}
+                    personState={patchState(unit.personId)}
+                    spouseState={spouse ? patchState(spouse.id) : undefined}
+                  />
+                  {anyHasSiblings && (
+                    <div className="couple-slots">
                       <div className="person-slot">
-                        {spouseSiblingIds.length > 0 && (
+                        {personSiblingIds.length > 0 && (
                           <SiblingFlap
-                            count={spouseSiblingIds.length}
-                            open={openFlaps.has(spouse.id)}
-                            onToggle={() => toggleFlap(spouse.id)}
+                            count={personSiblingIds.length}
+                            open={openFlaps.has(unit.personId)}
+                            onToggle={() => toggleFlap(unit.personId)}
                           />
                         )}
                       </div>
-                    )}
-                  </div>
-                )}
-                {personSiblingIds.length > 0 && openFlaps.has(unit.personId) && renderSiblingList(personSiblingIds)}
-                {spouse && spouseSiblingIds.length > 0 && openFlaps.has(spouse.id) && renderSiblingList(spouseSiblingIds)}
-              </div>
+                      {spouse && (
+                        <div className="person-slot">
+                          {spouseSiblingIds.length > 0 && (
+                            <SiblingFlap
+                              count={spouseSiblingIds.length}
+                              open={openFlaps.has(spouse.id)}
+                              onToggle={() => toggleFlap(spouse.id)}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {personSiblingIds.length > 0 && openFlaps.has(unit.personId) && renderSiblingColumns(personSiblingIds)}
+                {spouse && spouseSiblingIds.length > 0 && openFlaps.has(spouse.id) && renderSiblingColumns(spouseSiblingIds)}
+              </Fragment>
             )
           })}
         </div>
