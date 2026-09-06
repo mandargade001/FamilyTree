@@ -46,3 +46,42 @@ design doc), planned into three tasks, and implemented in full on branch
   regressions.
 - Specs 2 and 3 remain deferred — not designed, planned, or implemented this
   session.
+
+## Final review fixes (Findings 1 & 2)
+
+**Asked:** apply two findings from a final whole-branch code review of this branch:
+(1) a stale test comment still referencing the deleted `renderSiblingList`/`.sibling-list`
+by name; (2) investigate whether sibling columns rendered by `renderSiblingColumns` can
+sit vertically misaligned against the owner's column within the same `.gen` row (owner's
+column can have a `.couple-slots` Add-Parent spacer above its `Couple`; sibling columns
+never did), and fix it if real.
+
+**What was done:**
+- **Finding 1** — updated the comment attached to the
+  `'focusing a sibling dims an unrelated person but not the sibling's own spouse, in the
+  sibling list'` test in `TreeView.test.tsx` to say `renderSiblingColumns` instead of
+  `renderSiblingList`, dropping the "sibling-list" framing while keeping the explanatory
+  content. Comment-only; no assertion changes.
+- **Finding 2** — confirmed the bug is real: `.gen { align-items: flex-start }` plus the
+  owner's row unit conditionally rendering a real-height `.couple-slots`/`AddParentSlot`
+  box above its `Couple` (when `anyMissingParent`), with sibling columns never having an
+  equivalent, means the owner's `Couple` can sit lower than the siblings' whenever a flap
+  is open on a row with a missing-parent person. Fixed by passing the row unit's
+  `anyMissingParent` into `renderSiblingColumns` as a `reserveTopSlot` flag; when true, each
+  sibling column gets an empty `aria-hidden` `.sibling-slot-reserve` spacer (new CSS rule,
+  `min-height: 56px`, approximating `.add-parent-slot`'s box) above its `Couple`. Scoped to
+  only the rows where the disparity can occur, rather than unconditionally on every row.
+  Considered and rejected reproducing `AddParentSlot`'s actual markup as an invisible
+  height-matching clone (more code, and its literal "Add Parent" text would have broken
+  `getAllByText('Add Parent')` count assertions in existing tests).
+
+**Outcome:**
+- Commits: `5411df5` (Finding 1: stale comment), `3f4c960` (Finding 2: sibling-column
+  top-slot reserve).
+- Tests: `TreeView.test.tsx` 22/22 passing; full client suite (`npm test`) 13 files / 106
+  tests passing, no regressions.
+- Concern (noted, not blocking): the `56px` spacer height is a manual approximation of
+  `.add-parent-slot`'s rendered box, not derived — jsdom performs no real layout so this
+  can't be pixel-verified by the test suite; it will silently drift if `.add-parent-slot`'s
+  padding/border/font/margin change later. No browser-rendered visual check was performed.
+  Full report: `.superpowers/sdd/2026-09-06-profile-close-and-sibling-layout/final-fix-report.md`.
