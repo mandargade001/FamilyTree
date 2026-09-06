@@ -35,6 +35,15 @@ async function openMeeraProfile() {
   await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument())
 }
 
+test('the close button on a profile returns to the bare tree', async () => {
+  await openMeeraProfile()
+
+  fireEvent.click(screen.getByLabelText('Close profile'))
+
+  expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument()
+  expect(screen.getByText('Meera Gade')).toBeInTheDocument()
+})
+
 test('loads people and relationships and renders the tree', async () => {
   render(<App />)
   await waitFor(() => expect(screen.getByText('Meera Gade')).toBeInTheDocument())

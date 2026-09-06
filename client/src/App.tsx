@@ -292,6 +292,7 @@ export default function App() {
           onOpenPerson={(id) => setPanel({ kind: 'profile', personId: id })}
           onCenterHere={() => setFocalId(panel.personId)}
           onDelete={() => requirePassphrase(() => { void handleDeletePerson(panel.personId) })}
+          onClose={() => setPanel({ kind: 'none' })}
           onUploadPhoto={(file) => requestUploadPhoto(panel.personId, file)}
         />
       )}
