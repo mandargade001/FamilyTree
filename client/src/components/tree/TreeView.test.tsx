@@ -191,12 +191,12 @@ test('double-clicking the spouse side of the ancestor couple focuses the anchor 
 
 test('focusing a sibling dims an unrelated person but not the sibling\'s own spouse, in the sibling list', () => {
   // Sanjay (a sibling in meera's sibling flap) has his own spouse Priya —
-  // rendered via renderSiblingList's Couple call, a different call site from
-  // the main ancestor row. Priya must light up as in-focus (she's Sanjay's
-  // spouse) while Meera's own child Rohan — rendered but outside Sanjay's
-  // immediate family — stays dimmed, proving the sibling-list Couple call
-  // also threads personState/spouseState correctly rather than only
-  // handling the sibling anchor.
+  // rendered via renderSiblingColumns' Couple call, a different call site
+  // from the main ancestor row. Priya must light up as in-focus (she's
+  // Sanjay's spouse) while Meera's own child Rohan — rendered but outside
+  // Sanjay's immediate family — stays dimmed, proving renderSiblingColumns'
+  // Couple call also threads personState/spouseState correctly rather than
+  // only handling the sibling anchor.
   const extendedPeople = [...people, person('priya', 'Priya'), person('rohan', 'Rohan')]
   const extendedRelationships: Relationship[] = [
     ...relationships,
