@@ -209,6 +209,96 @@ test('Center tree here re-roots the tree on that person', async () => {
   expect(screen.getByText('Edit Profile')).toBeInTheDocument()
 })
 
+test('creating a standalone person via + Add Person navigates to their own profile', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('nina-id')
+
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Meera Gade')).toBeInTheDocument())
+
+  // Only the post-create refresh (inside handleSavePerson) should see Nina —
+  // the initial mount load above already consumed the module's default value.
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'nina-id', first_name: 'Nina', last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+
+  fireEvent.click(screen.getAllByText('Add Person')[0])
+  await waitFor(() => expect(screen.getByText('Save')).toBeInTheDocument())
+
+  fireEvent.change(screen.getByLabelText(/First name/), { target: { value: 'Nina' } })
+  fireEvent.click(screen.getByText('Save'))
+
+  // Landed on Nina's own profile, not a bare tree — otherwise she'd be an
+  // orphan only reachable later via another person's relationship-picker search.
+  await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument())
+  expect(addPerson).toHaveBeenCalledWith(expect.objectContaining({ first_name: 'Nina' }))
+  expect(screen.getAllByText('Nina').length).toBeGreaterThan(0)
+})
+
+test('a duplicate-relationship error is translated into a friendly message', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(addRelationship as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    new Error('duplicate key value violates unique constraint "relationships_unique_edge"'),
+  )
+  await openMeeraProfile()
+
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Nina' } })
+  fireEvent.click(screen.getByText('Create new person "Nina"'))
+
+  await waitFor(() => expect(screen.getByText("They're already linked that way.")).toBeInTheDocument())
+  expect(screen.queryByText(/duplicate key value violates/)).not.toBeInTheDocument()
+})
+
+test('a "person not found" error is translated into a friendly message', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(updatePerson as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('person not found'))
+  await openMeeraProfile()
+
+  fireEvent.click(screen.getByText('Edit Profile'))
+  await waitFor(() => expect(screen.getByText('Edit Person')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Save'))
+
+  await waitFor(() => expect(screen.getByText('That record no longer exists — try reloading.')).toBeInTheDocument())
+  expect(screen.queryByText('person not found')).not.toBeInTheDocument()
+})
+
+test('viewing a profile for a person removed from the list (e.g. deleted in another tab) falls back instead of crashing', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  // Priya first so she becomes the initial focal person (and thus renders as
+  // her own tree patch, depth-0, even with no recorded relationships yet).
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'priya', first_name: 'Priya', last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Priya')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Priya'))
+  await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument())
+
+  // Simulate another tab deleting Priya: the next refresh (triggered here by
+  // linking Meera as her spouse) returns a list that no longer contains her.
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Priya')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Spouse'))
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Meera' } })
+  fireEvent.click(screen.getByText('Meera Gade'))
+
+  // handleLinkExisting refreshes (Priya is now gone) then tries to set the
+  // panel back to Priya's profile — this must not crash, and must fall back
+  // to a sane panel instead of rendering a dead profile off a stale id.
+  await waitFor(() => expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument())
+  // The app is still alive and rendering normally (not a blank crashed page).
+  expect(screen.getByText('Add Person')).toBeInTheDocument()
+})
+
 test('deleting the focal person returns to the bare tree view', async () => {
   localStorage.setItem('vansh:passphrase', 'test-passphrase')
   vi.spyOn(window, 'confirm').mockReturnValue(true)

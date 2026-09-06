@@ -27,6 +27,25 @@ function isIncorrectPassphraseError(err: unknown): boolean {
   return err instanceof Error && /incorrect passphrase/i.test(err.message)
 }
 
+// Translates known raw Postgres/PostgREST error substrings into human-readable
+// messages for the error banner. Falls through to the raw message for
+// anything not recognized here, so unknown errors are never hidden.
+function friendlyErrorMessage(message: string): string {
+  if (message.includes('duplicate key') && message.includes('relationships_unique_edge')) {
+    return "They're already linked that way."
+  }
+  if (/incorrect passphrase/i.test(message)) {
+    return 'Incorrect passphrase.'
+  }
+  if (/first name is required/i.test(message)) {
+    return 'Please enter a first name.'
+  }
+  if (/person not found/i.test(message) || /relationship not found/i.test(message)) {
+    return 'That record no longer exists — try reloading.'
+  }
+  return message
+}
+
 export default function App() {
   const [people, setPeople] = useState<Person[]>([])
   const [relationships, setRelationships] = useState<Relationship[]>([])
@@ -38,6 +57,21 @@ export default function App() {
   useEffect(() => {
     void load()
   }, [])
+
+  // A panel can hold a stale person id — e.g. another browser tab deleted
+  // that person, or a race between two writes — after which `.find()` would
+  // return undefined. Self-heal by dropping back to a sane panel state
+  // instead of leaving the render-time guards below to paper over it forever.
+  useEffect(() => {
+    const missing = (id: string) => !people.some((p) => p.id === id)
+    if (panel.kind === 'profile' && missing(panel.personId)) {
+      setPanel({ kind: 'none' })
+    } else if (panel.kind === 'picker' && missing(panel.anchorId)) {
+      setPanel({ kind: 'none' })
+    } else if (panel.kind === 'form' && panel.editingId && missing(panel.editingId)) {
+      setPanel({ kind: 'none' })
+    }
+  }, [people, panel])
 
   async function load() {
     setLoadState('loading')
@@ -83,7 +117,7 @@ export default function App() {
       setPanel({ kind: 'gate', onUnlocked: () => setPanel({ kind: 'none' }) })
       return true
     }
-    setErrorMessage(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+    setErrorMessage(err instanceof Error ? friendlyErrorMessage(err.message) : 'Something went wrong. Please try again.')
     return false
   }
 
@@ -101,7 +135,11 @@ export default function App() {
         const newId = await addPerson(fields)
         if (!focalId) setFocalId(newId)
         await refresh()
-        setPanel({ kind: 'none' })
+        // The standalone "+ Add Person" flow creates a person with no
+        // relationship yet — land on their own profile so they're immediately
+        // visible and editable, rather than leaving them an orphan only
+        // reachable later via another person's relationship-picker search.
+        setPanel({ kind: 'profile', personId: newId })
       }
     } catch (err) {
       // Leave the form panel in place (unless handleWriteError opened the
@@ -213,6 +251,14 @@ export default function App() {
     )
   }
 
+  // Resolve any panel-referenced person id once, up front, so a stale id
+  // (the person was deleted — by this session or another) never reaches a
+  // non-null assertion. The self-healing effect above will reset the panel
+  // shortly after; these guards just make sure nothing crashes in the render
+  // before that effect runs.
+  const profilePerson = panel.kind === 'profile' ? people.find((p) => p.id === panel.personId) : undefined
+  const pickerAnchor = panel.kind === 'picker' ? people.find((p) => p.id === panel.anchorId) : undefined
+
   return (
     <div className="app">
       {errorBanner}
@@ -236,9 +282,9 @@ export default function App() {
         />
       )}
 
-      {panel.kind === 'profile' && (
+      {panel.kind === 'profile' && profilePerson && (
         <PersonProfile
-          person={people.find((p) => p.id === panel.personId)!}
+          person={profilePerson}
           people={people}
           relationships={relationships}
           onEdit={() => requirePassphrase(() => setPanel({ kind: 'form', editingId: panel.personId }))}
@@ -258,9 +304,9 @@ export default function App() {
         />
       )}
 
-      {panel.kind === 'picker' && (
+      {panel.kind === 'picker' && pickerAnchor && (
         <RelationshipPicker
-          anchorPerson={people.find((p) => p.id === panel.anchorId)!}
+          anchorPerson={pickerAnchor}
           people={people}
           onLinkExisting={(kind, personId) => {
             const anchorId = panel.anchorId
