@@ -13,6 +13,7 @@ vi.mock('./api/relationships', () => ({
 }))
 vi.mock('./api/photos', () => ({
   uploadPhoto: vi.fn(),
+  listPhotos: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('./lib/supabaseClient', () => ({
   supabase: { rpc: vi.fn(), from: vi.fn() },

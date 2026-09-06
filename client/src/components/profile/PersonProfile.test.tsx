@@ -1,4 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { vi } from 'vitest'
+
+const mockListPhotos = vi.hoisted(() => vi.fn())
+vi.mock('../../api/photos', () => ({ listPhotos: mockListPhotos }))
+
 import { PersonProfile } from './PersonProfile'
 import type { Person, Relationship } from '../../types'
 
@@ -28,6 +33,11 @@ function baseProps(overrides: Partial<Parameters<typeof PersonProfile>[0]> = {})
     ...overrides,
   }
 }
+
+beforeEach(() => {
+  mockListPhotos.mockReset()
+  mockListPhotos.mockResolvedValue([])
+})
 
 test('renders name and available meta fields, omitting blank ones', () => {
   render(<PersonProfile {...baseProps()} />)
@@ -102,4 +112,34 @@ test('uploading a photo shows an error message on failure', async () => {
   const input = container.querySelector('input[type="file"]') as HTMLInputElement
   fireEvent.change(input, { target: { files: [file] } })
   await waitFor(() => expect(screen.getByText('incorrect passphrase')).toBeInTheDocument())
+})
+
+test('falls back to the placeholder icon and shows no gallery row when there are no photos', async () => {
+  mockListPhotos.mockResolvedValue([])
+  const { container } = render(<PersonProfile {...baseProps()} />)
+  await waitFor(() => expect(mockListPhotos).toHaveBeenCalledWith('meera'))
+  expect(container.querySelector('.gallery-row')).not.toBeInTheDocument()
+  expect(container.querySelector('.profile-photo img')).not.toBeInTheDocument()
+})
+
+test('renders fetched photos as a gallery and uses the first as the profile photo', async () => {
+  mockListPhotos.mockResolvedValue(['https://cdn.example/meera/a.jpg', 'https://cdn.example/meera/b.jpg'])
+  const { container } = render(<PersonProfile {...baseProps()} />)
+  await waitFor(() => expect(container.querySelectorAll('.gallery-thumb')).toHaveLength(2))
+  const mainPhoto = container.querySelector('.profile-photo img') as HTMLImageElement
+  expect(mainPhoto.src).toBe('https://cdn.example/meera/a.jpg')
+})
+
+test('a successful upload re-fetches and shows the new photo in the gallery', async () => {
+  mockListPhotos.mockResolvedValueOnce([]).mockResolvedValueOnce(['https://cdn.example/meera/new.jpg'])
+  const onUploadPhoto = vi.fn().mockResolvedValue({ ok: true })
+  const { container } = render(<PersonProfile {...baseProps({ onUploadPhoto })} />)
+  await waitFor(() => expect(mockListPhotos).toHaveBeenCalledTimes(1))
+
+  const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement
+  fireEvent.change(input, { target: { files: [file] } })
+
+  await waitFor(() => expect(mockListPhotos).toHaveBeenCalledTimes(2))
+  await waitFor(() => expect(container.querySelectorAll('.gallery-thumb')).toHaveLength(1))
 })

@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Person, Relationship } from '../../types'
 import { computeImmediateFamily } from '../../lib/familyGraph'
+import { listPhotos } from '../../api/photos'
 import { Icon } from '../shared/Icon'
 import { Button } from '../shared/Button'
 
@@ -36,6 +37,17 @@ export function PersonProfile({
 
   const [uploadStatus, setUploadStatus] = useState<{ state: 'idle' | 'uploading' | 'success' | 'error'; message?: string }>({ state: 'idle' })
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [photos, setPhotos] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void listPhotos(person.id).then((urls) => {
+      if (!cancelled) setPhotos(urls)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [person.id])
 
   const chips: { role: string; personId: string }[] = [
     ...family.parents.map((id) => ({ role: 'Parent', personId: id })),
@@ -51,6 +63,7 @@ export function PersonProfile({
     void onUploadPhoto(file).then((result) => {
       if (result.ok) {
         setUploadStatus({ state: 'success' })
+        void listPhotos(person.id).then(setPhotos)
       } else {
         setUploadStatus({ state: 'error', message: result.message })
       }
@@ -71,7 +84,18 @@ export function PersonProfile({
   return (
     <div className="profile-layout">
       <div>
-        <div className="profile-photo"><Icon name="photo" size={28} /></div>
+        <div className="profile-photo">
+          {photos[0] ? <img src={photos[0]} alt={`${name || 'Profile'} photo`} /> : <Icon name="photo" size={28} />}
+        </div>
+        {photos.length > 0 && (
+          <div className="gallery-row">
+            {photos.map((url) => (
+              <div className="gallery-thumb" key={url}>
+                <img src={url} alt="" />
+              </div>
+            ))}
+          </div>
+        )}
         <input
           ref={fileInputRef}
           type="file"

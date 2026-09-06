@@ -21,3 +21,17 @@ export async function uploadPhoto(personId: string, file: File): Promise<void> {
     throw error
   }
 }
+
+// Photos are stored under photos/<personId>/<filename> in a public-read
+// bucket, deliberately not tracked in a database column — so "listing a
+// person's photos" means listing that storage folder. A person with no
+// photos yet (folder doesn't exist) or a listing failure are both normal,
+// expected states here, not errors worth throwing over — callers just get
+// an empty gallery.
+export async function listPhotos(personId: string): Promise<string[]> {
+  const { data, error } = await supabase.storage.from('photos').list(personId)
+  if (error || !data) return []
+  return data
+    .filter((entry) => entry.name)
+    .map((entry) => supabase.storage.from('photos').getPublicUrl(`${personId}/${entry.name}`).data.publicUrl)
+}
