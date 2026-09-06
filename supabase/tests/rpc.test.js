@@ -55,6 +55,23 @@ test('anon cannot update app_config directly (passphrase hash cannot be overwrit
   )
 })
 
+test('app_config has row-level security enabled at the relation level', async () => {
+  const { rows } = await pool.query(
+    `select relrowsecurity from pg_class where relname = 'app_config' and relnamespace = 'public'::regnamespace`
+  )
+  assert.equal(rows.length, 1, 'expected to find the app_config relation')
+  assert.equal(rows[0].relrowsecurity, true, 'expected row-level security to be enabled on app_config')
+})
+
+test('anon and authenticated have zero table-level grants on app_config', async () => {
+  const { rows } = await pool.query(
+    `select grantee, privilege_type from information_schema.role_table_grants
+     where table_schema = 'public' and table_name = 'app_config'
+       and grantee in ('anon', 'authenticated')`
+  )
+  assert.deepEqual(rows, [], `expected no grants for anon/authenticated on app_config, but found: ${JSON.stringify(rows)}`)
+})
+
 test('verify_passphrase rejects the wrong passphrase', async () => {
   const { data, error } = await supabase.rpc('verify_passphrase', { p_passphrase: 'definitely-wrong' })
   assert.equal(error, null)
