@@ -104,3 +104,4 @@ VITE_SUPABASE_URL=<your project URL> VITE_SUPABASE_ANON_KEY=<your anon key> npm 
 - Uploaded photos are stored and listed per-person, but the app has no way to reorder, caption, or delete an individual photo once uploaded.
 - There's no way to browse *all* people at once outside of the tree view and relationship search — a person with no relationships yet is only reachable by searching for them by name from another profile, or by having just created them (which now navigates to their profile automatically).
 - No passphrase-rotation UI; rotating it is the manual SQL step above.
+
