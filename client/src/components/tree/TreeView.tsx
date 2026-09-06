@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import type { Person, Relationship } from '../../types'
 import { buildAncestorRows, computeImmediateFamily, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
 import { Couple, type PersonVisualState } from './Couple'
@@ -144,6 +144,30 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     setFocusedId(null)
   }
 
+  // Escape clears focus mode too, not just the "Exit focus" button. Only
+  // listen while there's an active focus, and clean up on every re-run so
+  // there's never more than one listener attached across renders/unmounts.
+  useEffect(() => {
+    if (!focusedId) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') clearFocus()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [focusedId])
+
+  // Clicking the tree's background (not a patch/chip/button) also clears
+  // focus when active. Interactive elements (patches, flaps, toggles, slots)
+  // are all distinct nested elements, so a click that bubbles up from one of
+  // them is excluded by checking for a `closest` interactive ancestor rather
+  // than requiring the click to land exactly on the outer `.tree` element.
+  function handleBackgroundClick(e: MouseEvent<HTMLDivElement>) {
+    if (!focusedId) return
+    const target = e.target as HTMLElement
+    if (target.closest('.patch, .flap, .rel-chip, .collapse-dot, .add-parent-slot, button')) return
+    clearFocus()
+  }
+
   function patchState(personId: string): PersonVisualState {
     if (!focusedSet) return NEUTRAL_STATE
     return { inFocus: focusedSet.has(personId), dimmed: !focusedSet.has(personId) }
@@ -194,7 +218,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   }
 
   return (
-    <div className="tree">
+    <div className="tree" onClick={handleBackgroundClick}>
       {focusedId && (
         <button className="exit-focus" onClick={clearFocus}>Exit focus</button>
       )}

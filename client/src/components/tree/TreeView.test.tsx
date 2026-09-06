@@ -223,6 +223,42 @@ test('focus mode auto-expands a collapsed flap that lives on the spouse side of 
   expect(screen.getByText('RaviSibling').closest('.patch')).toHaveClass('in-focus')
 })
 
+test('pressing Escape clears the focused state', () => {
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
+  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+
+  fireEvent.keyDown(window, { key: 'Escape' })
+
+  expect(screen.getByText('Meera').closest('.patch')).not.toHaveClass('in-focus')
+  expect(screen.queryByText('Exit focus')).not.toBeInTheDocument()
+})
+
+test('clicking the tree background clears the focused state', () => {
+  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
+  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+
+  fireEvent.click(container.querySelector('.tree')!)
+
+  expect(screen.getByText('Meera').closest('.patch')).not.toHaveClass('in-focus')
+})
+
+test('clicking a patch while focused does not clear focus via the background handler', () => {
+  const onOpenProfile = vi.fn()
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} />)
+  fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
+  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+
+  // A plain single click on a patch (focus mode off) opens the profile — the
+  // click bubbles to the tree background handler too, which must not also
+  // clear focus out from under it.
+  fireEvent.click(screen.getByText('Anna').closest('.patch')!)
+
+  expect(onOpenProfile).toHaveBeenCalledWith('anna')
+  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+})
+
 test('the Focus Mode toggle makes a single click focus a person instead of opening their profile', () => {
   const onOpenProfile = vi.fn()
   render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} />)
