@@ -2,6 +2,8 @@
 
 A digital family tree — a React tree view backed by Supabase (Postgres + Storage + Edge Functions), styled per the "Family Quilt" design system. See `PRODUCT.md` and `DESIGN.md` for product and design background, and `docs/superpowers/specs/` / `docs/superpowers/plans/` for the original design spec and implementation plan.
 
+Live at: https://mandargade001.github.io/FamilyTree/ (once the deploy workflow below has run at least once).
+
 ## Project layout
 
 ```
