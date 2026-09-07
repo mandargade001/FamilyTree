@@ -41,7 +41,12 @@ export function PersonForm({ initial, onSave, onCancel }: PersonFormProps) {
         </div>
         <div className="form-row">
           <label htmlFor="gender">Gender</label>
-          <input id="gender" className="field" value={fields.gender ?? ''} onChange={(e) => set('gender', e.target.value)} placeholder="optional" />
+          <select id="gender" className="field" value={fields.gender ?? ''} onChange={(e) => set('gender', e.target.value)}>
+            <option value="">Prefer not to say</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
         </div>
       </div>
       <div className="two-col">

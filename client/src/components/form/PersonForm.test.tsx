@@ -10,6 +10,19 @@ describe('PersonForm', () => {
     expect(screen.getByText('Save')).not.toBeDisabled()
   })
 
+  it('gender is a dropdown with blank/Male/Female/Other options, writing null for the blank option', () => {
+    const onSave = vi.fn()
+    render(<PersonForm initial={null} onSave={onSave} onCancel={() => {}} />)
+    fireEvent.change(screen.getByLabelText(/First name/), { target: { value: 'Anna' } })
+
+    const genderSelect = screen.getByLabelText('Gender') as HTMLSelectElement
+    expect(Array.from(genderSelect.options).map((o) => o.value)).toEqual(['', 'Male', 'Female', 'Other'])
+
+    fireEvent.change(genderSelect, { target: { value: 'Female' } })
+    fireEvent.click(screen.getByText('Save'))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ gender: 'Female' }))
+  })
+
   it('calls onSave with the entered fields, defaulting optional fields to null', () => {
     const onSave = vi.fn()
     render(<PersonForm initial={null} onSave={onSave} onCancel={() => {}} />)
