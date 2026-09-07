@@ -24,7 +24,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { beforeEach } from 'vitest'
 import App from './App'
 import { addPerson, updatePerson, fetchPeople, deletePerson } from './api/people'
-import { addRelationship } from './api/relationships'
+import { addRelationship, fetchRelationships } from './api/relationships'
 
 beforeEach(() => localStorage.clear())
 
@@ -261,6 +261,73 @@ test('a duplicate-relationship error is translated into a friendly message', asy
 
   await waitFor(() => expect(screen.getByText("They're already linked that way.")).toBeInTheDocument())
   expect(screen.queryByText(/duplicate key value violates/)).not.toBeInTheDocument()
+})
+
+test("adding a sibling links them to the anchor's existing parent, not the anchor", async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'anna', first_name: 'Anna', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'parent-child', from_id: 'anna', to_id: 'meera' },
+  ])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Meera Gade')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Meera Gade'))
+  await waitFor(() => expect(screen.getByText('Add relationship')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('kiran-id')
+  fireEvent.click(screen.getByText('Sibling'))
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Kiran' } })
+  fireEvent.click(screen.getByText('Create new person "Kiran"'))
+
+  await waitFor(() => expect(addRelationship).toHaveBeenCalledWith('parent-child', 'anna', 'kiran-id'))
+  expect(addRelationship).not.toHaveBeenCalledWith('parent-child', 'meera', 'kiran-id')
+})
+
+test('adding a first parent reopens the picker with a role-specific nudge; adding a second returns to the profile', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  await openMeeraProfile()
+
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('anna-id')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'anna-id', first_name: 'Anna', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'parent-child', from_id: 'anna-id', to_id: 'meera' },
+  ])
+
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Anna' } })
+  fireEvent.click(screen.getByText('Create new person "Anna"'))
+
+  // First parent added (Female → "mother"): nudged to add the father next, not dropped back to the profile.
+  await waitFor(() => expect(screen.getByText('Add Father for Meera?')).toBeInTheDocument())
+  expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument()
+
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('ravi-id')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'anna-id', first_name: 'Anna', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'ravi-id', first_name: 'Ravi', last_name: null, gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'parent-child', from_id: 'anna-id', to_id: 'meera' },
+    { id: 'r2', type: 'parent-child', from_id: 'ravi-id', to_id: 'meera' },
+  ])
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Ravi' } })
+  fireEvent.click(screen.getByText('Create new person "Ravi"'))
+
+  // Second parent added: back to the profile, no further nudge.
+  await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument())
+  expect(screen.queryByText('Add Father for Meera?')).not.toBeInTheDocument()
+  expect(screen.queryByText(/^Add .* for Meera\?$/)).not.toBeInTheDocument()
 })
 
 test('a "person not found" error is translated into a friendly message', async () => {

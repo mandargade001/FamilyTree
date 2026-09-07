@@ -10,12 +10,14 @@ import { PersonForm } from './components/form/PersonForm'
 import { RelationshipPicker, type PickKind } from './components/picker/RelationshipPicker'
 import { PassphraseGate } from './components/gate/PassphraseGate'
 import { Icon } from './components/shared/Icon'
+import { getParentIds } from './lib/familyGraph'
+import { parentRoleLabel } from './lib/relationshipLabels'
 
 type Panel =
   | { kind: 'none' }
   | { kind: 'profile'; personId: string }
   | { kind: 'form'; editingId: string | null }
-  | { kind: 'picker'; anchorId: string }
+  | { kind: 'picker'; anchorId: string; heading?: string; subheading?: string; cancelLabel?: string }
   | { kind: 'creating' }
   | { kind: 'gate'; onUnlocked: () => void }
 
@@ -99,8 +101,10 @@ export default function App() {
   }
 
   async function refresh() {
-    setPeople(await fetchPeople())
-    setRelationships(await fetchRelationships())
+    const [newPeople, newRelationships] = await Promise.all([fetchPeople(), fetchRelationships()])
+    setPeople(newPeople)
+    setRelationships(newRelationships)
+    return { people: newPeople, relationships: newRelationships }
   }
 
   // Centralizes save-failure handling: a write rejected specifically for an
@@ -155,10 +159,39 @@ export default function App() {
     } else if (kind === 'child') {
       // The anchor becomes the parent of the picked/created person.
       await addRelationship('parent-child', anchorId, otherId)
+    } else if (kind === 'sibling') {
+      // The picked/created person becomes a parent-child of each of the
+      // anchor's own recorded parents (using relationships as it stood
+      // before this add — the sibling link itself never changes the
+      // anchor's own parents), making them a full or half sibling
+      // depending on how many parents are already known.
+      for (const parentId of getParentIds(anchorId, relationships)) {
+        await addRelationship('parent-child', parentId, otherId)
+      }
     } else {
       await addRelationship('spouse', anchorId, otherId)
     }
-    await refresh()
+
+    const { people: freshPeople, relationships: freshRelationships } = await refresh()
+
+    if (kind === 'parent') {
+      const parentIds = getParentIds(anchorId, freshRelationships)
+      if (parentIds.length === 1) {
+        const addedPerson = freshPeople.find((p) => p.id === otherId)
+        const anchorName = freshPeople.find((p) => p.id === anchorId)?.first_name ?? ''
+        const addedRole = parentRoleLabel(addedPerson?.gender ?? null)
+        const complementRole = addedPerson?.gender === 'Male' ? 'Mother' : addedPerson?.gender === 'Female' ? 'Father' : null
+        setPanel({
+          kind: 'picker',
+          anchorId,
+          heading: complementRole ? `Add ${complementRole} for ${anchorName}?` : `Add another parent for ${anchorName}?`,
+          subheading: `You just added ${addedPerson?.first_name ?? 'them'} as ${anchorName}'s ${addedRole.toLowerCase()}. ${complementRole ? `Add their ${complementRole.toLowerCase()} now, or skip for later.` : 'Add another now, or skip for later.'}`,
+          cancelLabel: 'Skip',
+        })
+        return
+      }
+    }
+
     setPanel({ kind: 'profile', personId: anchorId })
   }
 
@@ -307,9 +340,13 @@ export default function App() {
 
       {panel.kind === 'picker' && pickerAnchor && (
         <RelationshipPicker
+          key={panel.anchorId + (panel.heading ?? '')}
           anchorPerson={pickerAnchor}
           people={people}
           relationships={relationships}
+          heading={panel.heading}
+          subheading={panel.subheading}
+          cancelLabel={panel.cancelLabel}
           onLinkExisting={(kind, personId) => {
             const anchorId = panel.anchorId
             void handleLinkExisting(anchorId, kind, personId).catch((err) => {
