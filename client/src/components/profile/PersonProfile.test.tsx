@@ -4,6 +4,9 @@ import { vi } from 'vitest'
 const mockListPhotos = vi.hoisted(() => vi.fn())
 vi.mock('../../api/photos', () => ({ listPhotos: mockListPhotos }))
 
+const mockPickGooglePhoto = vi.hoisted(() => vi.fn())
+vi.mock('../../lib/googlePhotosPicker', () => ({ pickGooglePhoto: mockPickGooglePhoto }))
+
 import { PersonProfile } from './PersonProfile'
 import type { Person, Relationship } from '../../types'
 
@@ -38,6 +41,7 @@ function baseProps(overrides: Partial<Parameters<typeof PersonProfile>[0]> = {})
 beforeEach(() => {
   mockListPhotos.mockReset()
   mockListPhotos.mockResolvedValue([])
+  mockPickGooglePhoto.mockReset()
 })
 
 test('renders name and available meta fields, omitting blank ones', () => {
@@ -133,6 +137,38 @@ test('uploading a photo shows an error message on failure', async () => {
   const input = container.querySelector('input[type="file"]') as HTMLInputElement
   fireEvent.change(input, { target: { files: [file] } })
   await waitFor(() => expect(screen.getByText('incorrect passphrase')).toBeInTheDocument())
+})
+
+test('clicking "Import from Google Photos" uploads the picked file the same way as a local upload', async () => {
+  const pickedFile = new File(['data'], 'google-photo.jpg', { type: 'image/jpeg' })
+  mockPickGooglePhoto.mockResolvedValue(pickedFile)
+  const onUploadPhoto = vi.fn().mockResolvedValue({ ok: true })
+  render(<PersonProfile {...baseProps({ onUploadPhoto })} />)
+
+  fireEvent.click(screen.getByText('Import from Google Photos'))
+
+  await waitFor(() => expect(onUploadPhoto).toHaveBeenCalledWith(pickedFile))
+  await waitFor(() => expect(screen.getByText('Photo uploaded.')).toBeInTheDocument())
+})
+
+test('does nothing if the user closes the picker without choosing a photo', async () => {
+  mockPickGooglePhoto.mockResolvedValue(null)
+  const onUploadPhoto = vi.fn()
+  render(<PersonProfile {...baseProps({ onUploadPhoto })} />)
+
+  fireEvent.click(screen.getByText('Import from Google Photos'))
+
+  await waitFor(() => expect(mockPickGooglePhoto).toHaveBeenCalledOnce())
+  expect(onUploadPhoto).not.toHaveBeenCalled()
+})
+
+test('shows an error message if fetching the Google photo fails', async () => {
+  mockPickGooglePhoto.mockRejectedValue(new Error('Google Identity Services did not load'))
+  render(<PersonProfile {...baseProps()} />)
+
+  fireEvent.click(screen.getByText('Import from Google Photos'))
+
+  await waitFor(() => expect(screen.getByText('Google Identity Services did not load')).toBeInTheDocument())
 })
 
 test('falls back to the placeholder icon and shows no gallery row when there are no photos', async () => {

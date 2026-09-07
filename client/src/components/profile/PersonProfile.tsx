@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Person, Relationship } from '../../types'
 import { computeImmediateFamily } from '../../lib/familyGraph'
 import { listPhotos } from '../../api/photos'
+import { pickGooglePhoto } from '../../lib/googlePhotosPicker'
 import { parentRoleLabel, spouseRoleLabel } from '../../lib/relationshipLabels'
 import { Icon } from '../shared/Icon'
 import { Button } from '../shared/Button'
@@ -58,10 +59,7 @@ export function PersonProfile({
     ...family.children.map((id) => ({ role: 'Child', personId: id })),
   ]
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
+  function handleFile(file: File) {
     setUploadStatus({ state: 'uploading' })
     void onUploadPhoto(file).then((result) => {
       if (result.ok) {
@@ -71,6 +69,28 @@ export function PersonProfile({
         setUploadStatus({ state: 'error', message: result.message })
       }
     })
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    handleFile(file)
+  }
+
+  function handleGooglePhotoClick() {
+    setUploadStatus({ state: 'uploading' })
+    pickGooglePhoto()
+      .then((file) => {
+        if (file) {
+          handleFile(file)
+        } else {
+          setUploadStatus({ state: 'idle' })
+        }
+      })
+      .catch((err: unknown) => {
+        setUploadStatus({ state: 'error', message: err instanceof Error ? err.message : 'Could not import from Google Photos.' })
+      })
   }
 
   function handleDeleteClick() {
@@ -109,9 +129,14 @@ export function PersonProfile({
           style={{ display: 'none' }}
           onChange={handleFileChange}
         />
-        <Button variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={uploadStatus.state === 'uploading'}>
-          <Icon name="photo" size={14} /> {uploadStatus.state === 'uploading' ? 'Uploading…' : 'Upload photo'}
-        </Button>
+        <div className="photo-actions">
+          <Button variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={uploadStatus.state === 'uploading'}>
+            <Icon name="photo" size={14} /> {uploadStatus.state === 'uploading' ? 'Uploading…' : 'Upload photo'}
+          </Button>
+          <Button variant="ghost" onClick={handleGooglePhotoClick} disabled={uploadStatus.state === 'uploading'}>
+            <Icon name="photo" size={14} /> Import from Google Photos
+          </Button>
+        </div>
         {uploadStatus.state === 'success' && <div className="upload-status upload-status-ok">Photo uploaded.</div>}
         {uploadStatus.state === 'error' && <div className="upload-status upload-status-error">{uploadStatus.message}</div>}
       </div>
