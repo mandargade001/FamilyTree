@@ -289,14 +289,86 @@ test("adding a sibling links them to the anchor's existing parent, not the ancho
   expect(addRelationship).not.toHaveBeenCalledWith('parent-child', 'meera', 'kiran-id')
 })
 
-test('adding a first parent reopens the picker with a role-specific nudge; adding a second returns to the profile', async () => {
+test('retrying a sibling add after a partial failure completes the remaining parent link instead of getting stuck', async () => {
+  // Anchor has two recorded parents. Simulates a retry of the sibling-add
+  // action after an earlier attempt already linked the sibling to the first
+  // parent (anna) but failed before reaching the second (ravi): the first
+  // addRelationship call now hits a duplicate-edge conflict, which the loop
+  // must tolerate so it can still reach the second parent.
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'anna', first_name: 'Anna', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'ravi', first_name: 'Ravi', last_name: null, gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'parent-child', from_id: 'anna', to_id: 'meera' },
+    { id: 'r2', type: 'parent-child', from_id: 'ravi', to_id: 'meera' },
+  ])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Meera Gade')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Meera Gade'))
+  await waitFor(() => expect(screen.getByText('Add relationship')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('kiran-id')
+  ;(addRelationship as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    new Error('duplicate key value violates unique constraint "relationships_unique_edge"'),
+  )
+  fireEvent.click(screen.getByText('Sibling'))
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Kiran' } })
+  fireEvent.click(screen.getByText('Create new person "Kiran"'))
+
+  // The already-linked parent's duplicate-edge error was swallowed, and the
+  // loop still reached the second parent — no error banner, sibling fully linked.
+  await waitFor(() => expect(addRelationship).toHaveBeenCalledWith('parent-child', 'ravi', 'kiran-id'))
+  expect(addRelationship).toHaveBeenCalledWith('parent-child', 'anna', 'kiran-id')
+  expect(screen.queryByText("They're already linked that way.")).not.toBeInTheDocument()
+})
+
+test('linking an existing gendered person as a parent reopens the picker with a role-specific nudge', async () => {
+  // Reachable path: the linked person already exists with a recorded gender
+  // (unlike a freshly-created person, whose gender is always null), so the
+  // nudge can use the role-specific "Add Father/Mother" wording.
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'anna', first_name: 'Anna', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  await openMeeraProfile()
+
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'anna', first_name: 'Anna', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'parent-child', from_id: 'anna', to_id: 'meera' },
+  ])
+
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Anna' } })
+  fireEvent.click(screen.getByText('Anna'))
+
+  // Linked Anna (Female → "mother"): nudged to add the father next, not dropped back to the profile.
+  await waitFor(() => expect(screen.getByText('Add Father for Meera?')).toBeInTheDocument())
+  expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument()
+  expect(addRelationship).toHaveBeenCalledWith('parent-child', 'anna', 'meera')
+})
+
+test('adding a first parent via "Create new person" reopens the picker with the generic nudge (their gender is unknown); adding a second returns to the profile', async () => {
+  // A freshly-created person always has gender: null (there's no field to
+  // capture it at creation time), so the nudge can only use the generic
+  // "Add another parent" wording here — never the role-specific one.
   localStorage.setItem('vansh:passphrase', 'test-passphrase')
   await openMeeraProfile()
 
   ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('anna-id')
   ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
     { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
-    { id: 'anna-id', first_name: 'Anna', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'anna-id', first_name: 'Anna', last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
   ])
   ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
     { id: 'r1', type: 'parent-child', from_id: 'anna-id', to_id: 'meera' },
@@ -307,15 +379,17 @@ test('adding a first parent reopens the picker with a role-specific nudge; addin
   fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Anna' } })
   fireEvent.click(screen.getByText('Create new person "Anna"'))
 
-  // First parent added (Female → "mother"): nudged to add the father next, not dropped back to the profile.
-  await waitFor(() => expect(screen.getByText('Add Father for Meera?')).toBeInTheDocument())
+  expect(addPerson).toHaveBeenCalledWith(expect.objectContaining({ gender: null }))
+
+  // First parent added, gender unknown: generic nudge, not dropped back to the profile.
+  await waitFor(() => expect(screen.getByText('Add another parent for Meera?')).toBeInTheDocument())
   expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument()
 
   ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('ravi-id')
   ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
     { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
-    { id: 'anna-id', first_name: 'Anna', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
-    { id: 'ravi-id', first_name: 'Ravi', last_name: null, gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'anna-id', first_name: 'Anna', last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'ravi-id', first_name: 'Ravi', last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
   ])
   ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
     { id: 'r1', type: 'parent-child', from_id: 'anna-id', to_id: 'meera' },
@@ -326,7 +400,7 @@ test('adding a first parent reopens the picker with a role-specific nudge; addin
 
   // Second parent added: back to the profile, no further nudge.
   await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument())
-  expect(screen.queryByText('Add Father for Meera?')).not.toBeInTheDocument()
+  expect(screen.queryByText('Add another parent for Meera?')).not.toBeInTheDocument()
   expect(screen.queryByText(/^Add .* for Meera\?$/)).not.toBeInTheDocument()
 })
 

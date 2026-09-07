@@ -166,7 +166,14 @@ export default function App() {
       // anchor's own parents), making them a full or half sibling
       // depending on how many parents are already known.
       for (const parentId of getParentIds(anchorId, relationships)) {
-        await addRelationship('parent-child', parentId, otherId)
+        try {
+          await addRelationship('parent-child', parentId, otherId)
+        } catch (err) {
+          // If a retry after a partial failure re-links a parent that's
+          // already recorded, treat it as "already done" and keep going to
+          // the next parent rather than aborting the whole retry.
+          if (!(err instanceof Error && err.message.includes('relationships_unique_edge'))) throw err
+        }
       }
     } else {
       await addRelationship('spouse', anchorId, otherId)
