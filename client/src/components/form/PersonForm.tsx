@@ -24,22 +24,29 @@ export function PersonForm({ initial, onSave, onCancel }: PersonFormProps) {
 
   const canSave = fields.first_name.trim().length > 0
 
+  // A field counts as "filled" once it carries a value — drives the
+  // stitch-dot marker next to its label (see .form-row.filled in global.css).
+  function rowClass(value: string | null): string {
+    const filled = value !== null && value.trim().length > 0
+    return ['form-row', filled ? 'filled' : ''].filter(Boolean).join(' ')
+  }
+
   return (
     <div className="modal-shell">
       <div className="profile-name" style={{ fontSize: 19, marginBottom: 18 }}>
         {initial ? 'Edit Person' : 'Add Person'}
       </div>
 
-      <div className="form-row">
+      <div className={rowClass(fields.first_name)}>
         <label htmlFor="first_name">First name <span className="req">*</span></label>
         <input id="first_name" className="field" value={fields.first_name} onChange={(e) => set('first_name', e.target.value)} placeholder="e.g. Meera" />
       </div>
       <div className="two-col">
-        <div className="form-row">
+        <div className={rowClass(fields.last_name)}>
           <label htmlFor="last_name">Last name</label>
           <input id="last_name" className="field" value={fields.last_name ?? ''} onChange={(e) => set('last_name', e.target.value)} placeholder="optional" />
         </div>
-        <div className="form-row">
+        <div className={rowClass(fields.gender)}>
           <label htmlFor="gender">Gender</label>
           <select id="gender" className="field" value={fields.gender ?? ''} onChange={(e) => set('gender', e.target.value)}>
             <option value="">Prefer not to say</option>
@@ -50,24 +57,24 @@ export function PersonForm({ initial, onSave, onCancel }: PersonFormProps) {
         </div>
       </div>
       <div className="two-col">
-        <div className="form-row">
+        <div className={rowClass(fields.birth_date)}>
           <label htmlFor="birth_date">Birth date</label>
           <input id="birth_date" className="field" value={fields.birth_date ?? ''} onChange={(e) => set('birth_date', e.target.value)} placeholder='"1955" or "circa 1950s"' />
         </div>
-        <div className="form-row">
+        <div className={rowClass(fields.death_date)}>
           <label htmlFor="death_date">Death date</label>
           <input id="death_date" className="field" value={fields.death_date ?? ''} onChange={(e) => set('death_date', e.target.value)} placeholder="leave blank if living" />
         </div>
       </div>
-      <div className="form-row">
+      <div className={rowClass(fields.birth_place)}>
         <label htmlFor="birth_place">Birthplace</label>
         <input id="birth_place" className="field" value={fields.birth_place ?? ''} onChange={(e) => set('birth_place', e.target.value)} placeholder="optional" />
       </div>
-      <div className="form-row">
+      <div className={rowClass(fields.occupation)}>
         <label htmlFor="occupation">Occupation</label>
         <input id="occupation" className="field" value={fields.occupation ?? ''} onChange={(e) => set('occupation', e.target.value)} placeholder="optional" />
       </div>
-      <div className="form-row">
+      <div className={rowClass(fields.bio)}>
         <label htmlFor="bio">Bio / life story</label>
         <textarea id="bio" className="field" value={fields.bio ?? ''} onChange={(e) => set('bio', e.target.value)} placeholder="Free text — anecdotes, notable events…" />
       </div>
