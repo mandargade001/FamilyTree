@@ -18,9 +18,21 @@ body {
 .btn:disabled { cursor: default; opacity: .6; }
 .btn:focus-visible,
 .rel-type:focus-visible,
-.result-row:focus-visible,
 .create-new-row:focus-visible,
 .gate-cancel:focus-visible { outline: 2px solid var(--thread); outline-offset: 2px; }
+/* Inset, not outset: .result-list clips overflow, so an outward ring on a
+   row flush with its edges would be cropped. */
+.result-row:focus-visible { outline: 2px solid var(--thread); outline-offset: -2px; }
+
+/* The button that just committed a save/unlock briefly rings, then settles —
+   the "stitch pulls tight and holds" moment; never loops, always tied to a
+   real completion. */
+@keyframes stitch-close {
+  0% { box-shadow: var(--shadow-resting); }
+  40% { box-shadow: 0 0 0 4px var(--thread-soft), var(--shadow-lifted); }
+  100% { box-shadow: var(--shadow-resting); }
+}
+.btn.stitching { animation: stitch-close .22s cubic-bezier(.16, 1, .3, 1); pointer-events: none; }
 .form-row { position: relative; margin-bottom: var(--space-lg); }
 .form-row label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: var(--space-xs); }
 .req { color: var(--stitch-new); }
@@ -43,20 +55,20 @@ textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
   pointer-events: none;
 }
 .form-row:focus-within::after { transform: scaleX(1); }
-.form-row.filled label::before {
+/* The dot's box is always reserved (transparent) so a field going from
+   empty to filled never shifts the label sideways — only its color
+   transitions in. */
+.form-row label::before {
   content: '';
   display: inline-block;
   width: 5px; height: 5px;
   border-radius: 50%;
-  background: var(--thread);
+  background: transparent;
   margin-right: 6px;
   vertical-align: middle;
-  animation: stitch-pop .2s ease-out;
+  transition: background-color .15s ease;
 }
-@keyframes stitch-pop {
-  from { transform: scale(0); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
+.form-row.filled label::before { background: var(--thread); }
 
 .patch { width: 126px; background: var(--patch); border: 2px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 9px 8px 11px; display: flex; flex-direction: column; align-items: center; gap: 6px; box-shadow: var(--shadow-resting); position: relative; cursor: pointer; transition: opacity .2s ease, filter .2s ease, box-shadow .2s ease, border-color .2s ease; }
 .patch:hover { box-shadow: var(--shadow-lifted); border-color: var(--thread); }
@@ -178,8 +190,8 @@ textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
 .load-failed p { color: var(--muted); font-size: 13.5px; margin-bottom: 16px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn, .field, .form-row::after, .rel-type, .result-row, .create-new-row,
-  .gate-cancel, .gate-input, .gate-icon {
+  .btn, .field, .form-row::after, .form-row label::before, .rel-type,
+  .result-row, .create-new-row, .gate-cancel, .gate-input, .gate-icon {
     animation: none !important;
     transition: none !important;
   }

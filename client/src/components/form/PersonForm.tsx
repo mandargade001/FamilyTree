@@ -13,8 +13,15 @@ const EMPTY: PersonFields = {
   death_date: null, birth_place: null, occupation: null, bio: null,
 }
 
+// How long the "stitch closes" flourish plays on Save before the form
+// actually hands off to the caller — long enough to see, short enough that
+// it never reads as the app being slow (well under typical perceptible-lag
+// thresholds).
+const SAVE_FLOURISH_MS = 220
+
 export function PersonForm({ initial, onSave, onCancel }: PersonFormProps) {
   const [fields, setFields] = useState<PersonFields>(initial ?? EMPTY)
+  const [saving, setSaving] = useState(false)
 
   function set<K extends keyof PersonFields>(key: K, value: string) {
     // first_name must never be null (it's required), always keep it as string
@@ -80,8 +87,18 @@ export function PersonForm({ initial, onSave, onCancel }: PersonFormProps) {
       </div>
 
       <div className="form-actions">
-        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button variant="primary" disabled={!canSave} onClick={() => onSave(fields)}>Save</Button>
+        <Button variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Button>
+        <Button
+          variant="primary"
+          className={saving ? 'stitching' : ''}
+          disabled={!canSave || saving}
+          onClick={() => {
+            setSaving(true)
+            window.setTimeout(() => onSave(fields), SAVE_FLOURISH_MS)
+          }}
+        >
+          Save
+        </Button>
       </div>
     </div>
   )

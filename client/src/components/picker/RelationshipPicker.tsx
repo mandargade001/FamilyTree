@@ -54,15 +54,16 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
       </div>
       <p className="callout" style={{ marginBottom: 16 }}>{subheading ?? 'Choose the relationship type, then find or create the person.'}</p>
 
-      <div className="rel-type-row">
+      <div className="rel-type-row" role="radiogroup" aria-label="Relationship type">
         {TYPES.map((t) => {
           const disabled = t === 'sibling' && !anchorHasParents
           return (
             <div
               key={t}
               className={['rel-type', type === t ? 'selected' : '', disabled ? 'disabled' : ''].filter(Boolean).join(' ')}
-              aria-disabled={disabled}
-              role="button"
+              role="radio"
+              aria-checked={type === t}
+              aria-describedby={disabled ? 'sibling-blocked-note' : undefined}
               tabIndex={0}
               onClick={() => setType(t)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setType(t) } }}
@@ -72,7 +73,7 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
           )
         })}
       </div>
-      {!anchorHasParents && <p className="callout">Add a parent first to add siblings.</p>}
+      {!anchorHasParents && <p className="callout" id="sibling-blocked-note">Add a parent first to add siblings.</p>}
 
       <input className="field" placeholder="Search existing people…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ marginBottom: 12 }} />
 
@@ -84,8 +85,9 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
               key={p.id}
               role="button"
               tabIndex={0}
+              aria-disabled={typeIsBlocked}
               onClick={() => { if (!typeIsBlocked) onLinkExisting(type, p.id) }}
-              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !typeIsBlocked) { e.preventDefault(); onLinkExisting(type, p.id) } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!typeIsBlocked) onLinkExisting(type, p.id) } }}
             >
               <div className="result-avatar"><Icon name="photo" size={14} /></div>
               <div>{displayName(p)}</div>
@@ -99,8 +101,9 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
           className="create-new-row"
           role="button"
           tabIndex={0}
+          aria-disabled={typeIsBlocked}
           onClick={() => { if (!typeIsBlocked) onCreateNew(type, search) }}
-          onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !typeIsBlocked) { e.preventDefault(); onCreateNew(type, search) } }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!typeIsBlocked) onCreateNew(type, search) } }}
         >
           <Icon name="plus" size={14} />
           Create new person "{search}"

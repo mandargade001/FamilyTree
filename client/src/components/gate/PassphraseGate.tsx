@@ -9,10 +9,15 @@ interface PassphraseGateProps {
   onCancel: () => void
 }
 
+// How long the "stitch closes" flourish plays on a correct passphrase before
+// the gate actually hands off — same beat as PersonForm's Save flourish.
+const UNLOCK_FLOURISH_MS = 220
+
 export function PassphraseGate({ onUnlocked, onCancel }: PassphraseGateProps) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
+  const [unlocking, setUnlocking] = useState(false)
   // Increments on every failed attempt so the shake animation re-triggers
   // even on back-to-back wrong guesses (setting `error` to the same string
   // twice in a row wouldn't, by itself, re-run a class-driven CSS animation).
@@ -37,7 +42,8 @@ export function PassphraseGate({ onUnlocked, onCancel }: PassphraseGateProps) {
       return
     }
     setPassphrase(value)
-    onUnlocked()
+    setUnlocking(true)
+    window.setTimeout(onUnlocked, UNLOCK_FLOURISH_MS)
   }
 
   return (
@@ -52,8 +58,14 @@ export function PassphraseGate({ onUnlocked, onCancel }: PassphraseGateProps) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
-      {error && <div className="gate-error">{error}</div>}
-      <Button variant="primary" onClick={submit} disabled={checking} style={{ width: '100%', justifyContent: 'center' }}>
+      {error && <div className="gate-error" role="alert">{error}</div>}
+      <Button
+        variant="primary"
+        className={unlocking ? 'stitching' : ''}
+        onClick={submit}
+        disabled={checking || unlocking}
+        style={{ width: '100%', justifyContent: 'center' }}
+      >
         {checking ? 'Unlocking…' : 'Unlock editing'}
       </Button>
       <button className="gate-cancel" onClick={onCancel}>Cancel</button>

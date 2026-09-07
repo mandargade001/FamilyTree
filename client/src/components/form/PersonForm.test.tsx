@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { PersonForm } from './PersonForm'
 
@@ -10,7 +10,7 @@ describe('PersonForm', () => {
     expect(screen.getByText('Save')).not.toBeDisabled()
   })
 
-  it('gender is a dropdown with blank/Male/Female/Other options, writing null for the blank option', () => {
+  it('gender is a dropdown with blank/Male/Female/Other options, writing null for the blank option', async () => {
     const onSave = vi.fn()
     render(<PersonForm initial={null} onSave={onSave} onCancel={() => {}} />)
     fireEvent.change(screen.getByLabelText(/First name/), { target: { value: 'Anna' } })
@@ -20,18 +20,20 @@ describe('PersonForm', () => {
 
     fireEvent.change(genderSelect, { target: { value: 'Female' } })
     fireEvent.click(screen.getByText('Save'))
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ gender: 'Female' }))
+    // Save plays a brief completion flourish before actually calling onSave —
+    // see SAVE_FLOURISH_MS in PersonForm.tsx.
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ gender: 'Female' })))
   })
 
-  it('calls onSave with the entered fields, defaulting optional fields to null', () => {
+  it('calls onSave with the entered fields, defaulting optional fields to null', async () => {
     const onSave = vi.fn()
     render(<PersonForm initial={null} onSave={onSave} onCancel={() => {}} />)
     fireEvent.change(screen.getByLabelText(/First name/), { target: { value: 'Anna' } })
     fireEvent.click(screen.getByText('Save'))
-    expect(onSave).toHaveBeenCalledWith({
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({
       first_name: 'Anna', last_name: null, gender: null, birth_date: null,
       death_date: null, birth_place: null, occupation: null, bio: null,
-    })
+    }))
   })
 
   it('pre-fills fields from the initial value when editing', () => {
