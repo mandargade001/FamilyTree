@@ -1,10 +1,15 @@
 import { requestGoogleAccessToken } from './googleAuth'
 
 describe('requestGoogleAccessToken', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id')
+  })
+
   afterEach(() => {
     // `google` is declared optional on Window (see google-identity.d.ts),
     // so this is valid TS without a suppression comment.
     delete window.google
+    vi.unstubAllEnvs()
   })
 
   it('resolves with the access token on success', async () => {
@@ -44,5 +49,22 @@ describe('requestGoogleAccessToken', () => {
   it('rejects when Google Identity Services has not loaded', async () => {
     // window.google left undefined (script blocked, ad-blocker, offline, etc.)
     await expect(requestGoogleAccessToken()).rejects.toThrow('Google Identity Services did not load')
+  })
+
+  it('rejects with a clear error when VITE_GOOGLE_CLIENT_ID is not configured', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '')
+    window.google = {
+      accounts: {
+        oauth2: {
+          initTokenClient: () => ({
+            requestAccessToken: () => {
+              throw new Error('should not be called when client ID is missing')
+            },
+          }),
+        },
+      },
+    }
+
+    await expect(requestGoogleAccessToken()).rejects.toThrow('Google Photos import is not configured (missing client ID).')
   })
 })

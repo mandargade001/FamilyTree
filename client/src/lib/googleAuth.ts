@@ -8,6 +8,10 @@ export function requestGoogleAccessToken(): Promise<string> {
     }
 
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      reject(new Error('Google Photos import is not configured (missing client ID).'))
+      return
+    }
     const client = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: SCOPE,

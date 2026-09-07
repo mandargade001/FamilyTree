@@ -5,9 +5,13 @@ vi.mock('./googleAuth', () => ({ requestGoogleAccessToken: vi.fn().mockResolvedV
 const originalFetch = global.fetch
 const originalOpen = window.open
 
+function makeFakePopup(): Window {
+  return { location: { href: '' } } as unknown as Window
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
-  window.open = vi.fn()
+  window.open = vi.fn(() => makeFakePopup())
 })
 
 afterEach(() => {
@@ -32,7 +36,7 @@ test('drives the full flow and resolves with the picked photo as a File', async 
     }
     if (body?.action === 'list') {
       return new Response(JSON.stringify({
-        mediaItems: [{ id: 'item-1', baseUrl: 'https://example.com/photo', mimeType: 'image/jpeg' }],
+        mediaItems: [{ id: 'item-1', mediaFile: { baseUrl: 'https://example.com/photo', mimeType: 'image/jpeg' } }],
       }), { status: 200 })
     }
     if (body?.action === 'download') {
@@ -48,7 +52,7 @@ test('drives the full flow and resolves with the picked photo as a File', async 
   await vi.advanceTimersByTimeAsync(2000)
   const result = await resultPromise
 
-  expect(window.open).toHaveBeenCalledWith('https://photos.google.com/picker/session-1', '_blank')
+  expect(window.open).toHaveBeenCalledWith('', '_blank')
   expect(result).toBeInstanceOf(File)
   expect(result?.type).toBe('image/jpeg')
   expect(calls.map((c) => (c as { action: string }).action)).toEqual(['create', 'get', 'list', 'download', 'delete'])
@@ -79,7 +83,7 @@ test('resolves null if the session times out without a photo being picked', asyn
   expect(result).toBeNull()
 })
 
-test('rejects with a descriptive error when create fails, without opening a window or polling', async () => {
+test('rejects with a descriptive error when create fails, without polling', async () => {
   global.fetch = vi.fn(async (_url, opts) => {
     const body = opts?.body ? JSON.parse(opts.body as string) : null
     if (body?.action === 'create') {
@@ -89,7 +93,17 @@ test('rejects with a descriptive error when create fails, without opening a wind
   }) as typeof fetch
 
   await expect(pickGooglePhoto()).rejects.toThrow(/missing Google Authorization header/)
-  expect(window.open).not.toHaveBeenCalled()
+})
+
+test('rejects with a clear error when window.open is blocked by the browser, without requesting a token or calling the proxy', async () => {
+  window.open = vi.fn(() => null)
+  const { requestGoogleAccessToken } = await import('./googleAuth')
+  vi.mocked(requestGoogleAccessToken).mockClear()
+  global.fetch = vi.fn()
+
+  await expect(pickGooglePhoto()).rejects.toThrow(/popup/i)
+  expect(requestGoogleAccessToken).not.toHaveBeenCalled()
+  expect(global.fetch).not.toHaveBeenCalled()
 })
 
 test('rejects with a descriptive error when download fails instead of returning a corrupt File', async () => {
@@ -106,7 +120,7 @@ test('rejects with a descriptive error when download fails instead of returning 
     }
     if (body?.action === 'list') {
       return new Response(JSON.stringify({
-        mediaItems: [{ id: 'item-1', baseUrl: 'https://example.com/photo', mimeType: 'image/jpeg' }],
+        mediaItems: [{ id: 'item-1', mediaFile: { baseUrl: 'https://example.com/photo', mimeType: 'image/jpeg' } }],
       }), { status: 200 })
     }
     if (body?.action === 'download') {
