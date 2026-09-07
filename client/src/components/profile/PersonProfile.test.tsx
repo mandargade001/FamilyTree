@@ -53,6 +53,19 @@ test('lists relationship chips by role', () => {
   expect(screen.getByText('Child · Rohan')).toBeInTheDocument()
 })
 
+test('relationship chips use gender-aware role labels for parent and spouse', () => {
+  const father = person('anna-father', 'Anna', { gender: 'Male' })
+  const husband = person('deepak', 'Deepak', { gender: 'Male' })
+  const localPeople = [meera, father, husband]
+  const localRelationships: Relationship[] = [
+    { id: 'r1', type: 'parent-child', from_id: 'anna-father', to_id: 'meera' },
+    { id: 'r2', type: 'spouse', from_id: 'meera', to_id: 'deepak' },
+  ]
+  render(<PersonProfile {...baseProps({ people: localPeople, relationships: localRelationships })} />)
+  expect(screen.getByText('Father · Anna')).toBeInTheDocument()
+  expect(screen.getByText('Husband · Deepak')).toBeInTheDocument()
+})
+
 test('clicking a relationship chip opens that person', () => {
   const onOpenPerson = vi.fn()
   render(<PersonProfile {...baseProps({ onOpenPerson })} />)

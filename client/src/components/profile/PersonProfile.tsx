@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Person, Relationship } from '../../types'
 import { computeImmediateFamily } from '../../lib/familyGraph'
 import { listPhotos } from '../../api/photos'
+import { parentRoleLabel, spouseRoleLabel } from '../../lib/relationshipLabels'
 import { Icon } from '../shared/Icon'
 import { Button } from '../shared/Button'
 
@@ -52,8 +53,8 @@ export function PersonProfile({
   }, [person.id])
 
   const chips: { role: string; personId: string }[] = [
-    ...family.parents.map((id) => ({ role: 'Parent', personId: id })),
-    ...(family.spouse ? [{ role: 'Spouse', personId: family.spouse }] : []),
+    ...family.parents.map((id) => ({ role: parentRoleLabel(byId.get(id)?.gender ?? null), personId: id })),
+    ...(family.spouse ? [{ role: spouseRoleLabel(byId.get(family.spouse)?.gender ?? null), personId: family.spouse }] : []),
     ...family.children.map((id) => ({ role: 'Child', personId: id })),
   ]
 
