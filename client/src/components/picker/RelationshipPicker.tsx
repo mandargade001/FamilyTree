@@ -62,7 +62,10 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
               key={t}
               className={['rel-type', type === t ? 'selected' : '', disabled ? 'disabled' : ''].filter(Boolean).join(' ')}
               aria-disabled={disabled}
+              role="button"
+              tabIndex={0}
               onClick={() => setType(t)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setType(t) } }}
             >
               {LABELS[t]}
             </div>
@@ -76,7 +79,14 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
       {results.length > 0 && (
         <div className="result-list">
           {results.map((p) => (
-            <div className="result-row" key={p.id} onClick={() => { if (!typeIsBlocked) onLinkExisting(type, p.id) }}>
+            <div
+              className="result-row"
+              key={p.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => { if (!typeIsBlocked) onLinkExisting(type, p.id) }}
+              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !typeIsBlocked) { e.preventDefault(); onLinkExisting(type, p.id) } }}
+            >
               <div className="result-avatar"><Icon name="photo" size={14} /></div>
               <div>{displayName(p)}</div>
             </div>
@@ -85,7 +95,13 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
       )}
 
       {search.length > 0 && (
-        <div className="create-new-row" onClick={() => { if (!typeIsBlocked) onCreateNew(type, search) }}>
+        <div
+          className="create-new-row"
+          role="button"
+          tabIndex={0}
+          onClick={() => { if (!typeIsBlocked) onCreateNew(type, search) }}
+          onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !typeIsBlocked) { e.preventDefault(); onCreateNew(type, search) } }}
+        >
           <Icon name="plus" size={14} />
           Create new person "{search}"
         </div>
