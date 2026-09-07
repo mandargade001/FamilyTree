@@ -89,7 +89,7 @@ VITE_SUPABASE_URL=<your project URL> VITE_SUPABASE_ANON_KEY=<your anon key> VITE
    ```bash
    supabase functions deploy upload-photo
    ```
-6. **Push this repo to GitHub**, then set three repository secrets (Settings → Secrets and variables → Actions): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_GOOGLE_CLIENT_ID` from the Supabase project's API settings and Google Cloud Console respectively.
+6. **Push this repo to GitHub**, then set three repository secrets (Settings → Secrets and variables → Actions): `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from the Supabase project's API settings, and `VITE_GOOGLE_CLIENT_ID` from Google Cloud Console (see `docs/google-photos-setup.md` for the Google Cloud setup steps).
 7. **Enable GitHub Pages** (Settings → Pages → Source = "GitHub Actions"). Pushing to `main`/`master` triggers `.github/workflows/deploy.yml`, which builds and deploys automatically.
 
 **Note on the deploy path:** `client/vite.config.ts`'s `base` is set to match this repository's name. If you rename the GitHub repo, update that value to match, or the built assets will 404 on Pages.
