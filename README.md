@@ -64,7 +64,7 @@ npm run build          # production build
 To actually run the app against a real Supabase project during local development:
 
 ```bash
-VITE_SUPABASE_URL=<your project URL> VITE_SUPABASE_ANON_KEY=<your anon key> npm run dev
+VITE_SUPABASE_URL=<your project URL> VITE_SUPABASE_ANON_KEY=<your anon key> VITE_GOOGLE_CLIENT_ID=<your OAuth client ID> npm run dev
 ```
 
 (There's no local dev-server mode against the local Postgres instance — the local Postgres setup above is for testing the SQL/RPC layer directly; the actual app always talks to a real Supabase project's REST/RPC API, local or hosted.)
@@ -89,7 +89,7 @@ VITE_SUPABASE_URL=<your project URL> VITE_SUPABASE_ANON_KEY=<your anon key> npm 
    ```bash
    supabase functions deploy upload-photo
    ```
-6. **Push this repo to GitHub**, then set two repository secrets (Settings → Secrets and variables → Actions): `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, from the Supabase project's API settings.
+6. **Push this repo to GitHub**, then set three repository secrets (Settings → Secrets and variables → Actions): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_GOOGLE_CLIENT_ID` from the Supabase project's API settings and Google Cloud Console respectively.
 7. **Enable GitHub Pages** (Settings → Pages → Source = "GitHub Actions"). Pushing to `main`/`master` triggers `.github/workflows/deploy.yml`, which builds and deploys automatically.
 
 **Note on the deploy path:** `client/vite.config.ts`'s `base` is set to match this repository's name. If you rename the GitHub repo, update that value to match, or the built assets will 404 on Pages.
