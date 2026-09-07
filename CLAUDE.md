@@ -17,6 +17,10 @@ Keep entries factual and concise — this is a changelog/decision log, not a tra
 
 Do this proactively, without being asked each time — it's a standing practice, not a one-off task.
 
+## Implementation plan execution
+
+When an implementation plan (`docs/superpowers/plans/*.md`) is ready to execute, always use Subagent-Driven Development (`superpowers:subagent-driven-development`) — never ask which execution approach to use; just proceed with it.
+
 ## Other conventions
 
 - This project's local database tests run against a native local PostgreSQL install (not Docker/Supabase CLI) — see `README.md` for why and how.
