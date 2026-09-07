@@ -73,6 +73,33 @@ test('searching by last name finds the matching person', () => {
   expect(screen.queryByText('Deepak')).not.toBeInTheDocument()
 })
 
+test('heading, subheading, and cancel label can be overridden', () => {
+  render(
+    <RelationshipPicker
+      anchorPerson={anchor}
+      people={people}
+      relationships={[]}
+      onLinkExisting={() => {}}
+      onCreateNew={() => {}}
+      onCancel={() => {}}
+      heading="Add Mother for Meera?"
+      subheading="You just added Deepak as Meera's father."
+      cancelLabel="Skip"
+    />,
+  )
+  expect(screen.getByText('Add Mother for Meera?')).toBeInTheDocument()
+  expect(screen.getByText("You just added Deepak as Meera's father.")).toBeInTheDocument()
+  expect(screen.getByText('Skip')).toBeInTheDocument()
+  expect(screen.queryByText('Cancel')).not.toBeInTheDocument()
+})
+
+test('falls back to the default heading, subheading, and Cancel label when not overridden', () => {
+  render(<RelationshipPicker anchorPerson={anchor} people={people} relationships={[]} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={() => {}} />)
+  expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument()
+  expect(screen.getByText('Choose the relationship type, then find or create the person.')).toBeInTheDocument()
+  expect(screen.getByText('Cancel')).toBeInTheDocument()
+})
+
 test('clicking Cancel calls onCancel', () => {
   const onCancel = vi.fn()
   render(<RelationshipPicker anchorPerson={anchor} people={people} relationships={[]} onLinkExisting={() => {}} onCreateNew={() => {}} onCancel={onCancel} />)

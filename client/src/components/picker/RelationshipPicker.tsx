@@ -18,6 +18,9 @@ interface RelationshipPickerProps {
   onLinkExisting: (kind: PickKind, personId: string) => void
   onCreateNew: (kind: PickKind, searchText: string) => void
   onCancel: () => void
+  heading?: string
+  subheading?: string
+  cancelLabel?: string
 }
 
 const TYPES: PickKind[] = ['parent', 'child', 'spouse', 'sibling']
@@ -29,7 +32,7 @@ function displayName(p: Person): string {
   return p.last_name ? `${p.first_name} ${p.last_name}` : p.first_name
 }
 
-export function RelationshipPicker({ anchorPerson, people, relationships, onLinkExisting, onCreateNew, onCancel }: RelationshipPickerProps) {
+export function RelationshipPicker({ anchorPerson, people, relationships, onLinkExisting, onCreateNew, onCancel, heading, subheading, cancelLabel }: RelationshipPickerProps) {
   const [type, setType] = useState<PickKind>('parent')
   const [search, setSearch] = useState('')
   const anchorHasParents = getParentIds(anchorPerson.id, relationships).length > 0
@@ -47,9 +50,9 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
   return (
     <div className="picker-shell">
       <div className="profile-name" style={{ fontSize: 18, marginBottom: 2 }}>
-        Add relationship to {anchorPerson.first_name}
+        {heading ?? `Add relationship to ${anchorPerson.first_name}`}
       </div>
-      <p className="callout" style={{ marginBottom: 16 }}>Choose the relationship type, then find or create the person.</p>
+      <p className="callout" style={{ marginBottom: 16 }}>{subheading ?? 'Choose the relationship type, then find or create the person.'}</p>
 
       <div className="rel-type-row">
         {TYPES.map((t) => {
@@ -89,7 +92,7 @@ export function RelationshipPicker({ anchorPerson, people, relationships, onLink
       )}
 
       <div className="form-actions">
-        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+        <Button variant="ghost" onClick={onCancel}>{cancelLabel ?? 'Cancel'}</Button>
       </div>
     </div>
   )
