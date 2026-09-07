@@ -15,7 +15,8 @@ interface MediaItem {
 
 // Google returns durations as strings like "2s" or "3.5s".
 function parseDurationSeconds(duration: string): number {
-  return parseFloat(duration.replace('s', ''))
+  const seconds = parseFloat(duration.replace('s', ''))
+  return Number.isNaN(seconds) ? 0 : seconds
 }
 
 async function callProxy(googleToken: string, payload: Record<string, unknown>): Promise<Response> {
@@ -31,6 +32,22 @@ async function callProxy(googleToken: string, payload: Record<string, unknown>):
   })
 }
 
+// Throws with a message that includes the failing action and, when available,
+// the Edge Function's own error detail. The `download` action's success
+// response is a raw binary blob (not JSON), so on failure we can't assume
+// `.json()` will parse — fall back to the HTTP status in that case.
+async function assertOk(action: string, response: Response): Promise<Response> {
+  if (response.ok) return response
+  let detail = `HTTP ${response.status}`
+  try {
+    const body = await response.json()
+    if (body && typeof body.error === 'string') detail = body.error
+  } catch {
+    // response body wasn't parseable JSON — stick with the HTTP status
+  }
+  throw new Error(`Google Photos proxy '${action}' failed: ${detail}`)
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -41,7 +58,7 @@ function sleep(ms: number): Promise<void> {
 export async function pickGooglePhoto(): Promise<File | null> {
   const googleToken = await requestGoogleAccessToken()
 
-  const createRes = await callProxy(googleToken, { action: 'create' })
+  const createRes = await assertOk('create', await callProxy(googleToken, { action: 'create' }))
   const session: PickingSession = await createRes.json()
 
   window.open(session.pickerUri, '_blank')
@@ -53,7 +70,7 @@ export async function pickGooglePhoto(): Promise<File | null> {
   let picked = false
   while (Date.now() < deadline) {
     await sleep(pollIntervalMs)
-    const getRes = await callProxy(googleToken, { action: 'get', sessionId: session.id })
+    const getRes = await assertOk('get', await callProxy(googleToken, { action: 'get', sessionId: session.id }))
     const status: PickingSession = await getRes.json()
     if (status.mediaItemsSet) {
       picked = true
@@ -66,15 +83,15 @@ export async function pickGooglePhoto(): Promise<File | null> {
     return null
   }
 
-  const listRes = await callProxy(googleToken, { action: 'list', sessionId: session.id })
+  const listRes = await assertOk('list', await callProxy(googleToken, { action: 'list', sessionId: session.id }))
   const listData: { mediaItems: MediaItem[] } = await listRes.json()
   const item = listData.mediaItems[0]
 
-  const downloadRes = await callProxy(googleToken, { action: 'download', baseUrl: item.baseUrl })
+  const downloadRes = await assertOk('download', await callProxy(googleToken, { action: 'download', baseUrl: item.baseUrl }))
   const blob = await downloadRes.blob()
 
   void callProxy(googleToken, { action: 'delete', sessionId: session.id })
 
-  const extension = item.mimeType.split('/')[1] ?? 'jpg'
+  const extension = item.mimeType === 'image/jpeg' ? 'jpg' : (item.mimeType.split('/')[1] ?? 'jpg')
   return new File([blob], `google-photo.${extension}`, { type: item.mimeType })
 }

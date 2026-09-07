@@ -78,3 +78,48 @@ test('resolves null if the session times out without a photo being picked', asyn
 
   expect(result).toBeNull()
 })
+
+test('rejects with a descriptive error when create fails, without opening a window or polling', async () => {
+  global.fetch = vi.fn(async (_url, opts) => {
+    const body = opts?.body ? JSON.parse(opts.body as string) : null
+    if (body?.action === 'create') {
+      return new Response(JSON.stringify({ error: 'missing Google Authorization header' }), { status: 401 })
+    }
+    throw new Error(`unexpected action: ${body?.action}`)
+  }) as typeof fetch
+
+  await expect(pickGooglePhoto()).rejects.toThrow(/missing Google Authorization header/)
+  expect(window.open).not.toHaveBeenCalled()
+})
+
+test('rejects with a descriptive error when download fails instead of returning a corrupt File', async () => {
+  global.fetch = vi.fn(async (_url, opts) => {
+    const body = opts?.body ? JSON.parse(opts.body as string) : null
+    if (body?.action === 'create') {
+      return new Response(JSON.stringify({
+        id: 'session-3', pickerUri: 'https://photos.google.com/picker/session-3',
+        pollingConfig: { pollInterval: '2s', timeoutIn: '300s' }, mediaItemsSet: false,
+      }), { status: 200 })
+    }
+    if (body?.action === 'get') {
+      return new Response(JSON.stringify({ id: 'session-3', mediaItemsSet: true }), { status: 200 })
+    }
+    if (body?.action === 'list') {
+      return new Response(JSON.stringify({
+        mediaItems: [{ id: 'item-1', baseUrl: 'https://example.com/photo', mimeType: 'image/jpeg' }],
+      }), { status: 200 })
+    }
+    if (body?.action === 'download') {
+      return new Response(JSON.stringify({ error: 'Google returned 500 downloading the photo' }), { status: 502 })
+    }
+    if (body?.action === 'delete') {
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }
+    throw new Error(`unexpected action: ${body?.action}`)
+  }) as typeof fetch
+
+  const resultPromise = pickGooglePhoto()
+  const assertion = expect(resultPromise).rejects.toThrow(/Google returned 500 downloading the photo/)
+  await vi.advanceTimersByTimeAsync(2000)
+  await assertion
+})
