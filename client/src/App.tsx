@@ -309,6 +309,7 @@ export default function App() {
         <RelationshipPicker
           anchorPerson={pickerAnchor}
           people={people}
+          relationships={relationships}
           onLinkExisting={(kind, personId) => {
             const anchorId = panel.anchorId
             void handleLinkExisting(anchorId, kind, personId).catch((err) => {
