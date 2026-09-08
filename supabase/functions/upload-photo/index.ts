@@ -1,7 +1,14 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const MAX_BYTES = 10 * 1024 * 1024
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/heic']
+// Accept any image type rather than a narrow allowlist: this endpoint also
+// receives photos picked via the Google Photos Picker (see
+// google-photos-proxy), which only ever returns real media items the user
+// selected from their own library — Google may return jpeg, png, heic,
+// webp, gif, etc. depending on the source photo, all equally legitimate.
+// A hardcoded 3-format allowlist was appropriate when this only handled a
+// raw device file input (where a user could pick any file type by mistake),
+// but is now too strict for a second, already-curated source.
 
 // Every response — including error responses — must carry these, or the
 // browser blocks it as a CORS failure regardless of status code. The OPTIONS
@@ -49,8 +56,8 @@ Deno.serve(async (req) => {
   if (file.size > MAX_BYTES) {
     return jsonResponse({ error: 'file too large (max 10MB)' }, 400)
   }
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    return jsonResponse({ error: 'unsupported file type (jpg/png/heic only)' }, 400)
+  if (!file.type.startsWith('image/')) {
+    return jsonResponse({ error: 'unsupported file type (images only)' }, 400)
   }
 
   const path = `${personId}/${crypto.randomUUID()}-${file.name}`
