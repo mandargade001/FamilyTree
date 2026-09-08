@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import type { Person, Relationship } from '../../types'
 import { buildAncestorRows, computeImmediateFamily, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
+import { computeAncestorLayout } from '../../lib/ancestorLayout'
 import { Couple, type PersonVisualState } from './Couple'
 import { SiblingFlap } from './SiblingFlap'
 import { AddParentSlot } from './AddParentSlot'
@@ -325,6 +326,229 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     )
   }
 
+  // The pre-existing flex-based rendering, used whenever any sibling flap
+  // is open anywhere in the tree. See Global Constraints in the precise-
+  // ancestor-layout plan for why: grid-based precise positioning (see
+  // renderAncestorGrid below) doesn't yet compose with sibling-flap reveal,
+  // an explicit scope decision, not an oversight.
+  function renderFlexAncestorRows(): ReactNode {
+    return visibleRows.map((row) => (
+      <div className="gen" key={row.depth}>
+        {row.units.map((unit) => {
+          const person = byId.get(unit.personId)
+          if (!person) return null
+          const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
+
+          const personHasParents = getParentIds(unit.personId, relationships).length > 0
+          const spouseHasParents = spouse ? getParentIds(spouse.id, relationships).length > 0 : true
+          const personSiblingIds = siblingsOf(unit.personId)
+          const spouseSiblingIds = spouse ? siblingsOf(spouse.id) : []
+
+          const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
+          const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
+
+          const coupleColumn = (
+            <div className="gen-column" key="couple">
+              {anyMissingParent && (
+                <div className="couple-slots">
+                  <div className="person-slot">
+                    {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
+                  </div>
+                  {spouse && (
+                    <div className="person-slot">
+                      {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
+                    </div>
+                  )}
+                </div>
+              )}
+              <Couple
+                person={person}
+                spouse={spouse}
+                onOpen={handleOpen}
+                onDoubleOpen={focusOn}
+                personState={patchState(unit.personId)}
+                spouseState={spouse ? patchState(spouse.id) : undefined}
+              />
+              {anyHasSiblings && (
+                <div className="couple-slots">
+                  <div className="person-slot">
+                    {personSiblingIds.length > 0 && (
+                      <SiblingFlap
+                        count={personSiblingIds.length}
+                        open={openFlaps.has(unit.personId)}
+                        onToggle={() => toggleFlap(unit.personId)}
+                      />
+                    )}
+                  </div>
+                  {spouse && (
+                    <div className="person-slot">
+                      {spouseSiblingIds.length > 0 && (
+                        <SiblingFlap
+                          count={spouseSiblingIds.length}
+                          open={openFlaps.has(spouse.id)}
+                          onToggle={() => toggleFlap(spouse.id)}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {(row.depth > 0 || focalChildren.length > 0) && <SeamLine kind="parent-child" />}
+            </div>
+          )
+
+          const segments: ColumnSegment[] = [
+            { id: `couple-${unit.personId}`, label: clusterLabel(person, spouse), node: coupleColumn },
+          ]
+
+          function addSiblingSegments(siblingIds: string[], ownerId: string) {
+            if (siblingIds.length === 0 || !openFlaps.has(ownerId)) return
+            for (const sibId of siblingIds) {
+              const sibling = byId.get(sibId)
+              if (!sibling) continue
+              const sibSpouseId = getSpouseIds(sibId, relationships)[0]
+              const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) ?? null : null
+              segments.push({
+                id: sibId,
+                label: clusterLabel(sibling, sibSpouse),
+                node: renderSiblingColumn(sibId, sibling, sibSpouse, anyMissingParent),
+              })
+            }
+          }
+          addSiblingSegments(personSiblingIds, unit.personId)
+          if (spouse) addSiblingSegments(spouseSiblingIds, spouse.id)
+
+          const distinctLabels = new Set(segments.map((s) => s.label).filter((l): l is string => l !== null))
+          const shouldGroup = row.units.length > 1 || distinctLabels.size >= 2
+
+          return (
+            <Fragment key={unit.personId}>
+              {shouldGroup
+                ? groupSegmentsIntoClusters(segments, row.units.length > 1)
+                : segments.map((s) => <Fragment key={s.id}>{s.node}</Fragment>)}
+            </Fragment>
+          )
+        })}
+      </div>
+    ))
+  }
+
+  // Renders every currently-visible ancestor row as one shared CSS Grid, so
+  // a unit's horizontal position is guaranteed (by the grid itself, not by
+  // coincidental flex-centering) to sit above the specific person it's the
+  // parent-pair of. Only called when no sibling flap is open anywhere (see
+  // the branch in the main render body) — sibling columns aren't part of
+  // this grid at all; see Global Constraints.
+  function renderAncestorGrid(): ReactNode {
+    const spans = computeAncestorLayout(visibleRows)
+    const maxVisibleDepth = visibleRows.length > 0 ? Math.max(...visibleRows.map((r) => r.depth)) : 0
+    const items: ReactNode[] = []
+
+    for (const row of visibleRows) {
+      const contentRow = 2 * (maxVisibleDepth - row.depth) + 1
+      const connectorRow = contentRow + 1
+
+      for (const unit of row.units) {
+        const person = byId.get(unit.personId)
+        if (!person) continue
+        const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
+        const span = spans.get(unit.personId)
+        if (!span) continue
+
+        const personHasParents = getParentIds(unit.personId, relationships).length > 0
+        const spouseHasParents = spouse ? getParentIds(spouse.id, relationships).length > 0 : true
+        const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
+        const personSiblingIds = siblingsOf(unit.personId)
+        const spouseSiblingIds = spouse ? siblingsOf(spouse.id) : []
+        const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
+        const label = clusterLabel(person, spouse)
+        const boxed = row.units.length > 1
+
+        const coupleColumn = (
+          <div className="gen-column">
+            {anyMissingParent && (
+              <div className="couple-slots">
+                <div className="person-slot">
+                  {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
+                </div>
+                {spouse && (
+                  <div className="person-slot">
+                    {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
+                  </div>
+                )}
+              </div>
+            )}
+            <Couple
+              person={person}
+              spouse={spouse}
+              onOpen={handleOpen}
+              onDoubleOpen={focusOn}
+              personState={patchState(unit.personId)}
+              spouseState={spouse ? patchState(spouse.id) : undefined}
+            />
+            {anyHasSiblings && (
+              <div className="couple-slots">
+                <div className="person-slot">
+                  {personSiblingIds.length > 0 && (
+                    <SiblingFlap count={personSiblingIds.length} open={false} onToggle={() => toggleFlap(unit.personId)} />
+                  )}
+                </div>
+                {spouse && (
+                  <div className="person-slot">
+                    {spouseSiblingIds.length > 0 && (
+                      <SiblingFlap count={spouseSiblingIds.length} open={false} onToggle={() => toggleFlap(spouse.id)} />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+
+        items.push(
+          <div
+            className={boxed ? 'family-cluster ancestor-grid-item' : 'ancestor-grid-item'}
+            key={`content-${unit.personId}`}
+            style={{ gridColumn: `${span.start + 1} / ${span.end + 1}`, gridRow: contentRow }}
+          >
+            {boxed && label && <div className="family-cluster-label">{label}</div>}
+            {coupleColumn}
+          </div>,
+        )
+
+        if (row.depth > 0) {
+          items.push(
+            <div
+              className="seam seam-parent-child ancestor-grid-connector"
+              key={`connector-${unit.personId}`}
+              style={{ gridColumn: `${span.start + 1} / ${span.end + 1}`, gridRow: connectorRow }}
+            />,
+          )
+        }
+      }
+    }
+
+    // The focal couple's own connection down to their own children (the
+    // `.descendants` section) is a separate concern from ancestor-to-
+    // ancestor connectors above — it always exists whenever the focal
+    // person has recorded children, same condition as the old code used.
+    const rootRow = visibleRows.find((r) => r.depth === 0)
+    if (rootRow && focalChildren.length > 0) {
+      const rootSpan = spans.get(rootRow.units[0].personId)
+      if (rootSpan) {
+        items.push(
+          <div
+            className="seam seam-parent-child ancestor-grid-connector"
+            key="connector-focal-children"
+            style={{ gridColumn: `${rootSpan.start + 1} / ${rootSpan.end + 1}`, gridRow: 2 * maxVisibleDepth + 2 }}
+          />,
+        )
+      }
+    }
+
+    return <div className="ancestor-grid">{items}</div>
+  }
+
   return (
     <div className="tree" onClick={handleBackgroundClick}>
       {focusedId && (
@@ -354,105 +578,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           </div>
         </div>
       )}
-      {visibleRows.map((row) => (
-        <div className="gen" key={row.depth}>
-          {row.units.map((unit) => {
-            const person = byId.get(unit.personId)
-            if (!person) return null
-            const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
-
-            const personHasParents = getParentIds(unit.personId, relationships).length > 0
-            const spouseHasParents = spouse ? getParentIds(spouse.id, relationships).length > 0 : true
-            const personSiblingIds = siblingsOf(unit.personId)
-            const spouseSiblingIds = spouse ? siblingsOf(spouse.id) : []
-
-            const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
-            const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
-
-            const coupleColumn = (
-              <div className="gen-column" key="couple">
-                {anyMissingParent && (
-                  <div className="couple-slots">
-                    <div className="person-slot">
-                      {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
-                    </div>
-                    {spouse && (
-                      <div className="person-slot">
-                        {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <Couple
-                  person={person}
-                  spouse={spouse}
-                  onOpen={handleOpen}
-                  onDoubleOpen={focusOn}
-                  personState={patchState(unit.personId)}
-                  spouseState={spouse ? patchState(spouse.id) : undefined}
-                />
-                {anyHasSiblings && (
-                  <div className="couple-slots">
-                    <div className="person-slot">
-                      {personSiblingIds.length > 0 && (
-                        <SiblingFlap
-                          count={personSiblingIds.length}
-                          open={openFlaps.has(unit.personId)}
-                          onToggle={() => toggleFlap(unit.personId)}
-                        />
-                      )}
-                    </div>
-                    {spouse && (
-                      <div className="person-slot">
-                        {spouseSiblingIds.length > 0 && (
-                          <SiblingFlap
-                            count={spouseSiblingIds.length}
-                            open={openFlaps.has(spouse.id)}
-                            onToggle={() => toggleFlap(spouse.id)}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {(row.depth > 0 || focalChildren.length > 0) && <SeamLine kind="parent-child" />}
-              </div>
-            )
-
-            const segments: ColumnSegment[] = [
-              { id: `couple-${unit.personId}`, label: clusterLabel(person, spouse), node: coupleColumn },
-            ]
-
-            function addSiblingSegments(siblingIds: string[], ownerId: string) {
-              if (siblingIds.length === 0 || !openFlaps.has(ownerId)) return
-              for (const sibId of siblingIds) {
-                const sibling = byId.get(sibId)
-                if (!sibling) continue
-                const sibSpouseId = getSpouseIds(sibId, relationships)[0]
-                const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) ?? null : null
-                segments.push({
-                  id: sibId,
-                  label: clusterLabel(sibling, sibSpouse),
-                  node: renderSiblingColumn(sibId, sibling, sibSpouse, anyMissingParent),
-                })
-              }
-            }
-            addSiblingSegments(personSiblingIds, unit.personId)
-            if (spouse) addSiblingSegments(spouseSiblingIds, spouse.id)
-
-            const distinctLabels = new Set(segments.map((s) => s.label).filter((l): l is string => l !== null))
-            const shouldGroup = row.units.length > 1 || distinctLabels.size >= 2
-
-            return (
-              <Fragment key={unit.personId}>
-                {shouldGroup
-                  ? groupSegmentsIntoClusters(segments, row.units.length > 1)
-                  : segments.map((s) => <Fragment key={s.id}>{s.node}</Fragment>)}
-              </Fragment>
-            )
-          })}
-        </div>
-      ))}
+      {openFlaps.size === 0 ? renderAncestorGrid() : renderFlexAncestorRows()}
       {hasMoreAncestors && (
         <button className="show-more-ancestors" onClick={() => setMaxAncestorDepth((d) => d + 1)}>
           Show more ancestors

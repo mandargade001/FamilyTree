@@ -670,14 +670,21 @@ test('re-centering resets the ancestor depth, open sibling flaps, and focus stat
 test('renders a parent-child connecting seam below each ancestor-row Couple, as a DOM sibling of .couple not nested inside it', () => {
   render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   const annaColumn = screen.getByText('Anna').closest('.gen-column')!
-  const seam = annaColumn.querySelector('.seam-parent-child')
   const couple = annaColumn.querySelector('.couple')!
-  expect(seam).not.toBeNull()
-  // Placement, not just presence: the seam must be a direct child of
-  // .gen-column and a sibling of .couple — not nested inside .couple, which
-  // is a horizontal flex row that would lay a vertical seam out sideways.
-  expect(seam!.parentElement).toBe(annaColumn)
   expect(couple.parentElement).toBe(annaColumn)
+  // No sibling flap is open here, so this renders via the grid path
+  // (renderAncestorGrid), where the ancestor-row seam is its own grid item
+  // (.ancestor-grid-connector) positioned by grid-row/grid-column — it is
+  // not a DOM child of .gen-column at all, unlike the flex path's seam.
+  // Still verifying the same substantive fact as before: the seam is not
+  // nested inside .couple (a horizontal flex row that would lay a vertical
+  // seam out sideways), and it lines up with Anna's own grid column.
+  expect(annaColumn.querySelector('.seam-parent-child')).toBeNull()
+  const annaItem = annaColumn.closest('.ancestor-grid-item') as HTMLElement
+  const seam = document.querySelector('.ancestor-grid-connector') as HTMLElement
+  expect(seam).not.toBeNull()
+  expect(seam.parentElement).toBe(document.querySelector('.ancestor-grid'))
+  expect(seam.style.gridColumn).toBe(annaItem.style.gridColumn)
 })
 
 test("the ancestor-row seam doesn't dangle below the focal person's own row when they have no recorded children", () => {
@@ -706,4 +713,74 @@ test("renders a parent-child connecting seam below a descendant's Couple, as a D
   expect(rohanSeam).not.toBeNull()
   expect(rohanSeam!.parentElement).toBe(rohanColumn)
   expect(rohanColumn.querySelector('.couple')!.parentElement).toBe(rohanColumn)
+})
+
+test('renders ancestor rows via the precise grid layout when no sibling flap is open', () => {
+  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  expect(container.querySelector('.ancestor-grid')).toBeInTheDocument()
+})
+
+test('opening a sibling flap falls back to the pre-existing flex rendering', () => {
+  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('2'))
+  expect(container.querySelector('.ancestor-grid')).not.toBeInTheDocument()
+  expect(container.querySelector('.gen')).toBeInTheDocument()
+})
+
+test("a couple's grid-column matches its computed span", () => {
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    person('meera5', 'Meera5'),
+    named('mangal5', 'Mangal5', 'Khandgaonkar'), named('kishan5', 'Kishan5', 'Talegave'),
+    named('hanmantrao5', 'Hanmantrao5', 'Khandgaonkar'), named('saraswati5', 'Saraswati5', 'Khandgaonkar'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'mangal5', to_id: 'kishan5' },
+    { id: 'r2', type: 'parent-child', from_id: 'mangal5', to_id: 'meera5' },
+    { id: 'r3', type: 'parent-child', from_id: 'kishan5', to_id: 'meera5' },
+    { id: 'r4', type: 'spouse', from_id: 'hanmantrao5', to_id: 'saraswati5' },
+    { id: 'r5', type: 'parent-child', from_id: 'hanmantrao5', to_id: 'mangal5' },
+    { id: 'r6', type: 'parent-child', from_id: 'saraswati5', to_id: 'mangal5' },
+  ]
+  render(<TreeView people={clusteredPeople} relationships={clusteredRelationships} focalId="meera5" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('Show more ancestors'))
+
+  // Mangal5's parents (Hanmantrao5+Saraswati5) span [0,2); Mangal5+Kishan5
+  // themselves span [0,3) (2 for her side's ancestry + 1 reserved for
+  // Kishan5's still-unrecorded side) — matching computeAncestorLayout's
+  // own asymmetric-width test case.
+  const hanmantraoItem = screen.getByText('Hanmantrao5 Khandgaonkar', { exact: false }).closest('.ancestor-grid-item') as HTMLElement
+  expect(hanmantraoItem.style.gridColumn).toBe('1 / 3')
+  const coupleItem = screen.getByText('Mangal5 Khandgaonkar', { exact: false }).closest('.ancestor-grid-item') as HTMLElement
+  expect(coupleItem.style.gridColumn).toBe('1 / 4')
+})
+
+test('a row with two unrelated lineages boxes both units even with no siblings revealed', () => {
+  // Reuses the same fixture shape as the existing multi-lineage
+  // family-cluster test, but asserts the grid path (no flap open) also
+  // boxes both units — this row.units.length > 1 behavior is unchanged
+  // from the pre-existing flex path's own version of this rule.
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    named('anna6', 'Anna6', 'Gade'), named('ravi6', 'Ravi6', 'Gade'), person('meera6', 'Meera6'),
+    named('anna_dad6', 'AnnaDad6', 'Gade'), named('anna_mom6', 'AnnaMom6', 'Gade'),
+    named('ravi_dad6', 'RaviDad6', 'Khandgaonkar'), named('ravi_mom6', 'RaviMom6', 'Khandgaonkar'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'anna6', to_id: 'ravi6' },
+    { id: 'r2', type: 'parent-child', from_id: 'anna6', to_id: 'meera6' },
+    { id: 'r3', type: 'parent-child', from_id: 'ravi6', to_id: 'meera6' },
+    { id: 'r4', type: 'spouse', from_id: 'anna_dad6', to_id: 'anna_mom6' },
+    { id: 'r5', type: 'parent-child', from_id: 'anna_dad6', to_id: 'anna6' },
+    { id: 'r6', type: 'parent-child', from_id: 'anna_mom6', to_id: 'anna6' },
+    { id: 'r7', type: 'spouse', from_id: 'ravi_dad6', to_id: 'ravi_mom6' },
+    { id: 'r8', type: 'parent-child', from_id: 'ravi_dad6', to_id: 'ravi6' },
+    { id: 'r9', type: 'parent-child', from_id: 'ravi_mom6', to_id: 'ravi6' },
+  ]
+  render(<TreeView people={clusteredPeople} relationships={clusteredRelationships} focalId="meera6" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('Show more ancestors'))
+
+  const gadeLabel = screen.getByText('Gade')
+  const khandgaonkarLabel = screen.getByText('Khandgaonkar')
+  expect(gadeLabel.closest('.family-cluster')).not.toBe(khandgaonkarLabel.closest('.family-cluster'))
 })
