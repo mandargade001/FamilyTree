@@ -71,7 +71,7 @@ reveal is explicitly out of scope for this plan).
   `.env.local` were deleted afterward and are not part of the commit.
 
 **Outcome:** All 174 tests pass (`npm test`); `tsc --noEmit` clean. Committed
-as `<commit-sha-filled-in-after-commit>` — "Render ancestor rows via a
+as `2863838` — "Render ancestor rows via a
 precise CSS Grid layout". Full task report:
 `.superpowers/sdd/2026-09-08-precise-ancestor-layout/task-3-report.md`.
 Open item: a real manual browser check (asymmetric-ancestry fixture, real
@@ -152,4 +152,4 @@ and general test-coverage gaps.
 files, 180 tests, all passing. `npx tsc --noEmit`: clean. Full detail
 (including exact browser-verification measurements) in
 `.superpowers/sdd/2026-09-08-precise-ancestor-layout/final-fix-report.md`.
-Commit SHA: `<commit-sha-filled-in-after-commit>`.
+Commit SHA: `1d8f5a7`.
