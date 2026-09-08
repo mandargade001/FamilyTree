@@ -243,10 +243,10 @@ test('double-clicking the spouse side of the ancestor couple focuses the anchor 
 
 test('focusing a sibling dims an unrelated person but not the sibling\'s own spouse, in the sibling list', () => {
   // Sanjay (a sibling in meera's sibling flap) has his own spouse Priya —
-  // rendered via renderSiblingColumns' Couple call, a different call site
+  // rendered via renderSiblingColumn's Couple call, a different call site
   // from the main ancestor row. Priya must light up as in-focus (she's
   // Sanjay's spouse) while Meera's own child Rohan — rendered but outside
-  // Sanjay's immediate family — stays dimmed, proving renderSiblingColumns'
+  // Sanjay's immediate family — stays dimmed, proving renderSiblingColumn's
   // Couple call also threads personState/spouseState correctly rather than
   // only handling the sibling anchor.
   const extendedPeople = [...people, person('priya', 'Priya'), person('rohan', 'Rohan')]
@@ -499,6 +499,143 @@ test('a revealed sibling who shares their partner\'s surname does not get an unn
 
   const shobhaColumn = screen.getByText('Shobha4', { exact: false }).closest('.gen-column')!
   expect(shobhaColumn.closest('.family-cluster')).toBeNull()
+})
+
+test('a unit with no resolvable surname in a multi-lineage row still gets boxed, just without a caption', () => {
+  // row.units.length > 1 must keep forcing each unit's couple into its own
+  // box (the two-unrelated-lineages guarantee), even when one unit's couple
+  // has no resolvable last name (mismatched/missing surnames) and so would
+  // otherwise render bare under the general null-label-stays-unboxed rule.
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    named('anna5', 'Anna5', 'Gade'), named('ravi5', 'Ravi5', 'Gade'), person('meera5', 'Meera5'),
+    named('anna_dad5', 'AnnaDad5', 'Gade'), named('anna_mom5', 'AnnaMom5', 'Gade'),
+    named('ravi_dad5', 'RaviDad5', 'Khandgaonkar'), person('ravi_mom5', 'RaviMom5'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'anna5', to_id: 'ravi5' },
+    { id: 'r2', type: 'parent-child', from_id: 'anna5', to_id: 'meera5' },
+    { id: 'r3', type: 'parent-child', from_id: 'ravi5', to_id: 'meera5' },
+    { id: 'r4', type: 'spouse', from_id: 'anna_dad5', to_id: 'anna_mom5' },
+    { id: 'r5', type: 'parent-child', from_id: 'anna_dad5', to_id: 'anna5' },
+    { id: 'r6', type: 'parent-child', from_id: 'anna_mom5', to_id: 'anna5' },
+    { id: 'r7', type: 'spouse', from_id: 'ravi_dad5', to_id: 'ravi_mom5' },
+    { id: 'r8', type: 'parent-child', from_id: 'ravi_dad5', to_id: 'ravi5' },
+    { id: 'r9', type: 'parent-child', from_id: 'ravi_mom5', to_id: 'ravi5' },
+  ]
+  render(<TreeView people={clusteredPeople} relationships={clusteredRelationships} focalId="meera5" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('Show more ancestors'))
+
+  const gadeLabel = screen.getByText('Gade')
+  const gadeCluster = gadeLabel.closest('.family-cluster')!
+  expect(gadeCluster).not.toBeNull()
+  expect(gadeCluster.querySelector('.family-cluster-label')).not.toBeNull()
+
+  const raviDadColumn = screen.getByText('RaviDad5', { exact: false }).closest('.gen-column')!
+  const raviDadCluster = raviDadColumn.closest('.family-cluster')!
+  expect(raviDadCluster).not.toBeNull()
+  expect(raviDadCluster).not.toBe(gadeCluster)
+  expect(raviDadCluster.querySelector('.family-cluster-label')).toBeNull()
+})
+
+test('a null-label sibling column gets a spacer wrapper to stay baseline-aligned with a genuinely boxed sibling', () => {
+  // Within a single-lineage unit (row.units.length === 1), distinctLabels
+  // >= 2 triggers boxing. Here the person-side sibling ('Khandgaonkar') is
+  // labeled — different from the couple's own 'Gade' — so shouldGroup is
+  // true and a real box gets drawn. The spouse-side sibling (Shobha6) has
+  // no resolvable surname; it must still render at the same vertical
+  // baseline as its boxed neighbors via a `.family-cluster-spacer` wrapper
+  // (matching padding/border, transparent border) rather than sitting bare
+  // and higher in the row.
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    person('meera6', 'Meera6'),
+    named('sarika6', 'Sarika6', 'Gade'), named('mallikarjun6', 'Mallikarjun6', 'Gade'),
+    named('sarika6_parent', 'Sarika6Parent', 'Khandgaonkar'), named('sarika6_sib', 'Sarika6Sib', 'Khandgaonkar'),
+    named('madhappa6', 'Madhappa6', 'Gade'), named('nagabai6', 'Nagabai6', 'Gade'),
+    person('shobha6', 'Shobha6'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'sarika6', to_id: 'mallikarjun6' },
+    { id: 'r2', type: 'parent-child', from_id: 'sarika6', to_id: 'meera6' },
+    { id: 'r3', type: 'parent-child', from_id: 'mallikarjun6', to_id: 'meera6' },
+    { id: 'r4', type: 'parent-child', from_id: 'sarika6_parent', to_id: 'sarika6' },
+    { id: 'r5', type: 'parent-child', from_id: 'sarika6_parent', to_id: 'sarika6_sib' },
+    { id: 'r6', type: 'spouse', from_id: 'madhappa6', to_id: 'nagabai6' },
+    { id: 'r7', type: 'parent-child', from_id: 'madhappa6', to_id: 'mallikarjun6' },
+    { id: 'r8', type: 'parent-child', from_id: 'nagabai6', to_id: 'mallikarjun6' },
+    { id: 'r9', type: 'parent-child', from_id: 'madhappa6', to_id: 'shobha6' },
+    { id: 'r10', type: 'parent-child', from_id: 'nagabai6', to_id: 'shobha6' },
+  ]
+  render(<TreeView people={clusteredPeople} relationships={clusteredRelationships} focalId="meera6" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+
+  let flap = document.querySelector<HTMLElement>('.sibling-bubble:not(.open)')
+  while (flap) {
+    fireEvent.click(flap)
+    flap = document.querySelector<HTMLElement>('.sibling-bubble:not(.open)')
+  }
+  expect(screen.getByText('Shobha6', { exact: false })).toBeInTheDocument()
+
+  const khandgaonkarLabel = screen.getByText('Khandgaonkar')
+  expect(khandgaonkarLabel.closest('.family-cluster')).not.toBeNull()
+
+  const shobhaColumn = screen.getByText('Shobha6', { exact: false }).closest('.gen-column')!
+  expect(shobhaColumn.closest('.family-cluster')).toBeNull()
+  expect(shobhaColumn.closest('.family-cluster-spacer')).not.toBeNull()
+})
+
+test('adjacent siblings sharing the couple\'s surname merge into the same cluster box as the couple', () => {
+  // The headline merge behavior: 2+ adjacent same-label segments collapse
+  // into ONE .family-cluster, not one box each. A full brother sharing the
+  // couple's surname ('Gade') must land in the couple's own box, while a
+  // spouse-side sibling from a different lineage ('Khandgaonkar') gets a
+  // separate one.
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    person('meera7', 'Meera7'),
+    named('sarika7', 'Sarika7', 'Gade'), named('mallikarjun7', 'Mallikarjun7', 'Gade'),
+    named('gade_bro7', 'GadeBro7', 'Gade'),
+    named('khand_sis7', 'KhandSis7', 'Khandgaonkar'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'sarika7', to_id: 'mallikarjun7' },
+    { id: 'r2', type: 'parent-child', from_id: 'sarika7', to_id: 'meera7' },
+    { id: 'r3', type: 'parent-child', from_id: 'mallikarjun7', to_id: 'meera7' },
+    // gade_bro7: full sibling of sarika7 (shares her parents implicitly via
+    // the same siblingsOf() lookup — sibling detection here is by a shared
+    // parent-child edge into a common parent; give them a shared parent).
+    { id: 'r4', type: 'parent-child', from_id: 'shared_parent7', to_id: 'sarika7' },
+    { id: 'r5', type: 'parent-child', from_id: 'shared_parent7', to_id: 'gade_bro7' },
+    // khand_sis7: sibling of mallikarjun7 via a different shared parent.
+    { id: 'r6', type: 'parent-child', from_id: 'shared_parent7b', to_id: 'mallikarjun7' },
+    { id: 'r7', type: 'parent-child', from_id: 'shared_parent7b', to_id: 'khand_sis7' },
+  ]
+  const shared7 = person('shared_parent7', 'SharedParent7')
+  const shared7b = person('shared_parent7b', 'SharedParent7b')
+  render(
+    <TreeView
+      people={[...clusteredPeople, shared7, shared7b]}
+      relationships={clusteredRelationships}
+      focalId="meera7"
+      onAddParent={() => {}}
+      onOpenProfile={() => {}}
+      onCenterOn={() => {}}
+    />,
+  )
+
+  let flap = document.querySelector<HTMLElement>('.sibling-bubble:not(.open)')
+  while (flap) {
+    fireEvent.click(flap)
+    flap = document.querySelector<HTMLElement>('.sibling-bubble:not(.open)')
+  }
+  const gadeBroColumn = screen.getByText('GadeBro7', { exact: false }).closest('.gen-column')!
+  const khandSisColumn = screen.getByText('KhandSis7', { exact: false }).closest('.gen-column')!
+  const gadeLabel = screen.getByText('Gade')
+  const khandgaonkarLabel = screen.getByText('Khandgaonkar')
+
+  expect(gadeBroColumn.closest('.family-cluster')).toBe(gadeLabel.closest('.family-cluster'))
+  expect(khandSisColumn.closest('.family-cluster')).toBe(khandgaonkarLabel.closest('.family-cluster'))
+  expect(gadeBroColumn.closest('.family-cluster')).not.toBe(khandSisColumn.closest('.family-cluster'))
 })
 
 test('re-centering resets the ancestor depth, open sibling flaps, and focus state back to the default', () => {

@@ -99,6 +99,10 @@ textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
 .gen-column { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); }
 .family-cluster { display: flex; align-items: flex-start; gap: var(--space-lg); border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); padding: var(--space-md); position: relative; }
 .family-cluster-label { position: absolute; top: -9px; left: var(--space-md); background: var(--canvas); padding: 0 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+/* Reserves the same padding/border footprint as .family-cluster, with a
+   transparent border, so a null-label segment that renders unboxed still
+   baseline-aligns with genuinely boxed segments in the same row-unit. */
+.family-cluster-spacer { border: 1.5px solid transparent; border-radius: var(--radius-md); padding: var(--space-md); }
 .couple { display: flex; align-items: center; position: relative; }
 .tree { display: flex; flex-direction: column-reverse; align-items: center; gap: var(--space-sm); overflow-x: auto; padding: var(--space-sm); }
 .descendants { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); margin-top: var(--space-lg); }

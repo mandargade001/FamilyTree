@@ -22,19 +22,36 @@ interface ColumnSegment {
 }
 
 // Groups adjacent same-label segments into one boxed, captioned
-// .family-cluster; a null-label segment (no determinable surname) always
+// .family-cluster; a null-label segment (no determinable surname) normally
 // stands alone, unboxed, next to whatever's on either side of it. Callers
 // only invoke this when boxing has already been decided as warranted (see
 // `shouldGroup` at the call site) — this function doesn't itself decide
 // whether to box anything, only how to partition segments once boxing is
 // happening.
-function groupSegmentsIntoClusters(segments: ColumnSegment[]): ReactNode {
+//
+// `forceLeadBox`: when true (row.units.length > 1 — two unrelated lineages
+// sharing one ancestor row), the first segment (the unit's couple column)
+// must always render inside a `.family-cluster` box even if its label is
+// null, so the row keeps a visible boundary between lineages. The caption
+// is simply omitted when there's no label, matching the pre-fix behavior's
+// `{label && ...}` pattern. Any OTHER null-label segment that ends up
+// unboxed here (this function only runs when at least one real box is
+// being drawn somewhere in the unit) still gets a `.family-cluster-spacer`
+// wrapper — same padding/border-width as a real box, transparent border —
+// so its content baseline-aligns with its boxed neighbors instead of
+// sitting higher in the row.
+function groupSegmentsIntoClusters(segments: ColumnSegment[], forceLeadBox: boolean): ReactNode {
   const output: ReactNode[] = []
   let i = 0
   while (i < segments.length) {
     const { label } = segments[i]
     if (label === null) {
-      output.push(<Fragment key={segments[i].id}>{segments[i].node}</Fragment>)
+      const boxed = i === 0 && forceLeadBox
+      output.push(
+        <div className={boxed ? 'family-cluster' : 'family-cluster-spacer'} key={segments[i].id}>
+          {segments[i].node}
+        </div>,
+      )
       i += 1
       continue
     }
@@ -429,7 +446,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
             return (
               <Fragment key={unit.personId}>
                 {shouldGroup
-                  ? groupSegmentsIntoClusters(segments)
+                  ? groupSegmentsIntoClusters(segments, row.units.length > 1)
                   : segments.map((s) => <Fragment key={s.id}>{s.node}</Fragment>)}
               </Fragment>
             )
