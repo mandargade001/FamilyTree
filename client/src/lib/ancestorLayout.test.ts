@@ -68,4 +68,44 @@ describe('computeAncestorLayout', () => {
   test('an empty rows array returns an empty map rather than throwing', () => {
     expect(computeAncestorLayout([]).size).toBe(0)
   })
+
+  // Finding 1 (Critical): buildAncestorRows emits two separate units that
+  // share the same childId whenever two co-parents have no recorded spouse
+  // relationship between them — the app's own default guided "add a
+  // parent" flow produces exactly this. Both units must still get a valid,
+  // non-overlapping span, and together they must consume exactly the width
+  // a single 2-wide unit would have needed, or one parent silently vanishes
+  // from the rendered tree.
+  test('two co-parents with no recorded spouse relationship both get non-overlapping spans', () => {
+    const rows: AncestorRow[] = [
+      { depth: 0, units: [{ personId: 'mangal', spouseId: 'kishan', childId: null }] },
+      {
+        depth: 1,
+        units: [
+          { personId: 'father', spouseId: null, childId: 'mangal' },
+          { personId: 'mother', spouseId: null, childId: 'mangal' },
+        ],
+      },
+    ]
+    const spans = computeAncestorLayout(rows)
+
+    const fatherSpan = spans.get('father')
+    const motherSpan = spans.get('mother')
+    expect(fatherSpan).toBeDefined()
+    expect(motherSpan).toBeDefined()
+
+    // Non-overlapping and contiguous.
+    expect(fatherSpan!.end - fatherSpan!.start).toBe(1)
+    expect(motherSpan!.end - motherSpan!.start).toBe(1)
+    const [first, second] = [fatherSpan!, motherSpan!].sort((a, b) => a.start - b.start)
+    expect(second.start).toBe(first.end)
+
+    // Combined width matches what a single 2-wide (spouse-recorded) unit
+    // would have needed for mangal's own personId-side reservation.
+    expect(second.end - first.start).toBe(2)
+
+    // mangal's own side (kishan's, still unrecorded) still reserves 1, so
+    // mangal's total span is 2 (father+mother) + 1 (kishan) = 3.
+    expect(spans.get('mangal')).toEqual({ start: 0, end: 3 })
+  })
 })

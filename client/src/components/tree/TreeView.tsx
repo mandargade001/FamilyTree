@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import type { Person, Relationship } from '../../types'
-import { buildAncestorRows, computeImmediateFamily, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
+import { buildAncestorRows, computeImmediateFamily, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds, type AncestorUnit } from '../../lib/familyGraph'
 import { computeAncestorLayout } from '../../lib/ancestorLayout'
 import { Couple, type PersonVisualState } from './Couple'
 import { SiblingFlap } from './SiblingFlap'
@@ -326,6 +326,78 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     )
   }
 
+  // Shared couple-column JSX used by both renderers below — Add-Parent
+  // slots, the <Couple> patch itself, and the sibling-flap row. The two
+  // renderers only differ in whether a <SeamLine> belongs directly under
+  // this column (`seam`; only the flex path's per-unit rendering draws it
+  // here — the grid path draws its connectors separately, positioned by
+  // grid row/column) and whether a SiblingFlap's `open` state reflects the
+  // real openFlaps set (`flapsInteractive`; the grid path only ever renders
+  // when openFlaps is empty, so it hardcodes flaps closed).
+  function renderCoupleColumn(
+    unit: AncestorUnit,
+    person: Person,
+    spouse: Person | null,
+    options: { seam: boolean; flapsInteractive: boolean },
+  ): ReactNode {
+    const personHasParents = getParentIds(unit.personId, relationships).length > 0
+    const spouseHasParents = spouse ? getParentIds(spouse.id, relationships).length > 0 : true
+    const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
+    const personSiblingIds = siblingsOf(unit.personId)
+    const spouseSiblingIds = spouse ? siblingsOf(spouse.id) : []
+    const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
+
+    return (
+      <div className="gen-column">
+        {anyMissingParent && (
+          <div className="couple-slots">
+            <div className="person-slot">
+              {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
+            </div>
+            {spouse && (
+              <div className="person-slot">
+                {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
+              </div>
+            )}
+          </div>
+        )}
+        <Couple
+          person={person}
+          spouse={spouse}
+          onOpen={handleOpen}
+          onDoubleOpen={focusOn}
+          personState={patchState(unit.personId)}
+          spouseState={spouse ? patchState(spouse.id) : undefined}
+        />
+        {anyHasSiblings && (
+          <div className="couple-slots">
+            <div className="person-slot">
+              {personSiblingIds.length > 0 && (
+                <SiblingFlap
+                  count={personSiblingIds.length}
+                  open={options.flapsInteractive && openFlaps.has(unit.personId)}
+                  onToggle={() => toggleFlap(unit.personId)}
+                />
+              )}
+            </div>
+            {spouse && (
+              <div className="person-slot">
+                {spouseSiblingIds.length > 0 && (
+                  <SiblingFlap
+                    count={spouseSiblingIds.length}
+                    open={options.flapsInteractive && openFlaps.has(spouse.id)}
+                    onToggle={() => toggleFlap(spouse.id)}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {options.seam && <SeamLine kind="parent-child" />}
+      </div>
+    )
+  }
+
   // The pre-existing flex-based rendering, used whenever any sibling flap
   // is open anywhere in the tree. See Global Constraints in the precise-
   // ancestor-layout plan for why: grid-based precise positioning (see
@@ -345,56 +417,14 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           const spouseSiblingIds = spouse ? siblingsOf(spouse.id) : []
 
           const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
-          const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
 
           const coupleColumn = (
-            <div className="gen-column" key="couple">
-              {anyMissingParent && (
-                <div className="couple-slots">
-                  <div className="person-slot">
-                    {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
-                  </div>
-                  {spouse && (
-                    <div className="person-slot">
-                      {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
-                    </div>
-                  )}
-                </div>
-              )}
-              <Couple
-                person={person}
-                spouse={spouse}
-                onOpen={handleOpen}
-                onDoubleOpen={focusOn}
-                personState={patchState(unit.personId)}
-                spouseState={spouse ? patchState(spouse.id) : undefined}
-              />
-              {anyHasSiblings && (
-                <div className="couple-slots">
-                  <div className="person-slot">
-                    {personSiblingIds.length > 0 && (
-                      <SiblingFlap
-                        count={personSiblingIds.length}
-                        open={openFlaps.has(unit.personId)}
-                        onToggle={() => toggleFlap(unit.personId)}
-                      />
-                    )}
-                  </div>
-                  {spouse && (
-                    <div className="person-slot">
-                      {spouseSiblingIds.length > 0 && (
-                        <SiblingFlap
-                          count={spouseSiblingIds.length}
-                          open={openFlaps.has(spouse.id)}
-                          onToggle={() => toggleFlap(spouse.id)}
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {(row.depth > 0 || focalChildren.length > 0) && <SeamLine kind="parent-child" />}
-            </div>
+            <Fragment key="couple">
+              {renderCoupleColumn(unit, person, spouse, {
+                seam: row.depth > 0 || focalChildren.length > 0,
+                flapsInteractive: true,
+              })}
+            </Fragment>
           )
 
           const segments: ColumnSegment[] = [
@@ -453,57 +483,15 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
         if (!person) continue
         const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
         const span = spans.get(unit.personId)
-        if (!span) continue
+        if (!span) {
+          console.warn('ancestor unit missing computed span, skipping render', unit.personId)
+          continue
+        }
 
-        const personHasParents = getParentIds(unit.personId, relationships).length > 0
-        const spouseHasParents = spouse ? getParentIds(spouse.id, relationships).length > 0 : true
-        const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
-        const personSiblingIds = siblingsOf(unit.personId)
-        const spouseSiblingIds = spouse ? siblingsOf(spouse.id) : []
-        const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
         const label = clusterLabel(person, spouse)
         const boxed = row.units.length > 1
 
-        const coupleColumn = (
-          <div className="gen-column">
-            {anyMissingParent && (
-              <div className="couple-slots">
-                <div className="person-slot">
-                  {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
-                </div>
-                {spouse && (
-                  <div className="person-slot">
-                    {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
-                  </div>
-                )}
-              </div>
-            )}
-            <Couple
-              person={person}
-              spouse={spouse}
-              onOpen={handleOpen}
-              onDoubleOpen={focusOn}
-              personState={patchState(unit.personId)}
-              spouseState={spouse ? patchState(spouse.id) : undefined}
-            />
-            {anyHasSiblings && (
-              <div className="couple-slots">
-                <div className="person-slot">
-                  {personSiblingIds.length > 0 && (
-                    <SiblingFlap count={personSiblingIds.length} open={false} onToggle={() => toggleFlap(unit.personId)} />
-                  )}
-                </div>
-                {spouse && (
-                  <div className="person-slot">
-                    {spouseSiblingIds.length > 0 && (
-                      <SiblingFlap count={spouseSiblingIds.length} open={false} onToggle={() => toggleFlap(spouse.id)} />
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
+        const coupleColumn = renderCoupleColumn(unit, person, spouse, { seam: false, flapsInteractive: false })
 
         items.push(
           <div

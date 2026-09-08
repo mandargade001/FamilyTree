@@ -724,7 +724,16 @@ test('opening a sibling flap falls back to the pre-existing flex rendering', () 
   const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.click(screen.getByText('2'))
   expect(container.querySelector('.ancestor-grid')).not.toBeInTheDocument()
-  expect(container.querySelector('.gen')).toBeInTheDocument()
+  // `.gen` alone is too weak an assertion here — the unrelated
+  // `.descendants` section also uses `.gen`, so it would pass even if the
+  // ancestor section itself never switched to flex rendering. Anchor on a
+  // known ancestor-row person (Anna, the focal person's parent) and confirm
+  // her `.gen-column` sits inside a `.gen` that is NOT nested under
+  // `.descendants` — i.e. she's rendered via the ancestor flex path.
+  const annaColumn = screen.getByText('Anna').closest('.gen-column')!
+  const annaGen = annaColumn.closest('.gen')
+  expect(annaGen).not.toBeNull()
+  expect(annaGen!.closest('.descendants')).toBeNull()
 })
 
 test("a couple's grid-column matches its computed span", () => {
@@ -783,4 +792,27 @@ test('a row with two unrelated lineages boxes both units even with no siblings r
   const gadeLabel = screen.getByText('Gade')
   const khandgaonkarLabel = screen.getByText('Khandgaonkar')
   expect(gadeLabel.closest('.family-cluster')).not.toBe(khandgaonkarLabel.closest('.family-cluster'))
+})
+
+test('a parent does not vanish from the grid when two co-parents have no recorded spouse relationship (Finding 1)', () => {
+  // The app's own default guided "add a parent" flow (App.tsx) writes only
+  // a parent-child edge per parent, and never auto-creates a spouse edge
+  // between the two co-parents it prompts the user to add one after
+  // another. buildAncestorRows then emits two separate units that both
+  // have the same childId. Before the Finding 1 fix, computeAncestorLayout
+  // silently overwrote one of those units in its childId-keyed map, so one
+  // parent got no span and renderAncestorGrid's `if (!span) continue`
+  // silently dropped them from the DOM entirely.
+  const noSpousePeople = [person('kid', 'Kid'), person('dad', 'Dad'), person('mom', 'Mom')]
+  const noSpouseRelationships: Relationship[] = [
+    { id: 'r1', type: 'parent-child', from_id: 'dad', to_id: 'kid' },
+    { id: 'r2', type: 'parent-child', from_id: 'mom', to_id: 'kid' },
+  ]
+  const { container } = render(
+    <TreeView people={noSpousePeople} relationships={noSpouseRelationships} focalId="kid" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />,
+  )
+  // No sibling flap is open, so this exercises the grid path specifically.
+  expect(container.querySelector('.ancestor-grid')).toBeInTheDocument()
+  expect(screen.getByText('Dad')).toBeInTheDocument()
+  expect(screen.getByText('Mom')).toBeInTheDocument()
 })
