@@ -64,3 +64,75 @@ that file). `npx tsc --noEmit`: clean, no output. Commit:
 load-time backfill" (`client/src/App.tsx`, `client/src/App.test.tsx`).
 Nothing left open for this task; `PersonForm.tsx` was not touched (out of
 scope per the brief), and no override flag was added.
+
+## Final whole-branch review, and the fix wave for its findings
+
+**Asked:** N/A — the standing SDD practice of a final whole-branch review
+after all tasks complete, dispatched on the most capable model.
+
+**Done:** The review (correctly) found what neither task-scoped review could:
+a Critical bug in Task 1's fixed-point algorithm. The original single
+interleaved loop let a blank `Female` fall back to her father's name before
+her spouse's own name had a chance to resolve later in the same pass, making
+the result depend on the arbitrary order of the `people` array (in
+production, data-entry order). Because the never-overwrite invariant then
+locks a resolved name in permanently, a wrong answer here would have been
+unrecoverable except by a human manually clearing the field. Four Important
+findings accompanied it, all in `App.tsx`'s wiring: a reconcile failure could
+surface as a false "Something went wrong" for an action that actually
+succeeded; a mid-loop failure left partial writes uncommitted-to-state with
+no `refresh()`; the load-time backfill fired a doomed write (and console
+error) on every page load for any visitor without a stored passphrase; and
+the `handleLinkExisting` call site — where the spouse-marriage rule is
+actually exercised — had no test coverage at all. Four Minor findings
+(only the first recorded spouse is ever consulted; whitespace isn't trimmed
+before propagating down a lineage; no escape hatch for a legitimately
+surname-less person; a benign load-path refresh race) were triaged by the
+reviewer itself as follow-ups, not part of this fix wave.
+
+Before dispatching the fix, checked the live Supabase data directly for the
+exact race-condition trigger (a blank-last-name woman with both a resolvable
+father and a blank-named husband) — none of the current 24 people hit it, so
+production data was never at risk even pre-fix, but the bug was real and
+would have bitten on future data.
+
+One fix wave addressed all five (Critical + 4 Important) in one dispatch:
+1. Split `resolveLastNames` into two phases — phase 1 iterates `Male ←
+   father` / `Female ← spouse` only (no father-fallback for a blank female)
+   to a true fixed point; phase 2 is one final sweep giving any still-blank
+   female her father's name. Provably order-independent, since no woman's
+   name is ever a propagation source for anyone else. Added a regression
+   test constructing the same bride/groom/fathers graph in both array
+   orderings and asserting identical output.
+2. & 3. (fixed together, one coherent layer in `reconcileLastNames`): each
+   per-person `updatePerson` call is now caught and logged individually (one
+   failure doesn't stop the batch — an unresolved name just stays blank and
+   retries on the next reconcile), and the whole loop is wrapped in
+   `try { ... } finally { await refresh() }` so state always reconciles with
+   the database regardless of how the loop went. The function never throws
+   to its callers anymore.
+4. Guarded the load-path call with `if (getPassphrase())`, matching the
+   passphrase-gating pattern already used elsewhere in `App.tsx`.
+5. Added an integration test linking an existing Male (non-blank last name)
+   to a Female (blank last name) as spouses via the relationship-picker UI
+   flow, asserting `updatePerson` is eventually called with his resolved
+   name. Also updated the load-time backfill test to store a passphrase
+   first (now a precondition per fix 4's guard) and added a test confirming
+   a passphrase-less load never calls `updatePerson`.
+
+A scoped re-review independently traced the two-phase algorithm by hand
+(confirmed phase 1 is a true fixed point with no female-as-source leak, and
+that the regression test asserts both orderings converge to the *same*
+value, not just two independently-passing assertions) and verified all five
+findings addressed with no new breakage.
+
+**Outcome:** `npm test`: 18 test files / 159 tests passing. `npx tsc
+--noEmit`: clean. Commits: `e54aa8e` ("Fix five final-review findings on
+last-name inheritance") plus a small session-log-accuracy correction. Merged
+to `master` at `831663f` via `finishing-a-development-branch` (merge locally,
+per the user's choice — matches every prior spec this session). Four Minor
+findings remain parked in the (now-deleted) SDD ledger, carried forward here:
+only-first-spouse-consulted, whitespace-not-trimmed, no manual-override
+escape hatch (an accepted consequence of the no-flag design, not a bug), and
+the benign load-path refresh race. None block merge; worth a future look if
+they ever bite.
