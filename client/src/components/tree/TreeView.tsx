@@ -5,6 +5,7 @@ import { Couple, type PersonVisualState } from './Couple'
 import { SiblingFlap } from './SiblingFlap'
 import { AddParentSlot } from './AddParentSlot'
 import { CollapseToggle } from './CollapseToggle'
+import { SeamLine } from './SeamLine'
 
 const NEUTRAL_STATE: PersonVisualState = { inFocus: false, dimmed: false }
 
@@ -73,6 +74,7 @@ function DescendantBranch({
         personState={stateFor(personId)}
         spouseState={spouse ? stateFor(spouse.id) : undefined}
       >
+        {childIds.length > 0 && <SeamLine kind="parent-child" />}
         {childIds.length > 0 && (
           <CollapseToggle
             expanded={expanded}
@@ -310,6 +312,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
                     personState={patchState(unit.personId)}
                     spouseState={spouse ? patchState(spouse.id) : undefined}
                   />
+                  <SeamLine kind="parent-child" />
                   {anyHasSiblings && (
                     <div className="couple-slots">
                       <div className="person-slot">

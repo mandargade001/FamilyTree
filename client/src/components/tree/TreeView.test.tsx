@@ -387,3 +387,19 @@ test('re-centering resets the ancestor depth and open sibling flaps back to the 
 
   expect(screen.queryByText('AnnaDad')).not.toBeInTheDocument()
 })
+
+test('renders a parent-child connecting seam below each ancestor-row Couple', () => {
+  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  const annaColumn = screen.getByText('Anna').closest('.gen-column')!
+  expect(annaColumn.querySelector('.seam-parent-child')).not.toBeNull()
+})
+
+test("renders a parent-child connecting seam below a descendant's Couple when they have children", () => {
+  const withChild = [...people, person('rohan', 'Rohan')]
+  const relsWithChild: Relationship[] = [...relationships, { id: 'r8', type: 'parent-child', from_id: 'meera', to_id: 'rohan' }]
+  render(<TreeView people={withChild} relationships={relsWithChild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.doubleClick(screen.getByText('Rohan').closest('.patch')!)
+  fireEvent.click(screen.getByText('Exit focus'))
+  const rohanColumn = screen.getByText('Rohan').closest('.gen-column')!
+  expect(rohanColumn.querySelector('.seam-parent-child')).toBeNull()
+})
