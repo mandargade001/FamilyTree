@@ -91,6 +91,8 @@ textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
 .exit-focus { display: inline-flex; align-items: center; gap: 6px; margin: 2px 6px 6px 0; background: var(--thread); color: #fff; border: none; border-radius: var(--radius-pill); height: 28px; padding: 0 14px; font-size: 11px; font-weight: 600; cursor: pointer; }
 .focus-mode-toggle { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 6px; background: var(--patch); border: 1.5px dashed var(--border-strong); color: var(--thread); border-radius: var(--radius-pill); height: 28px; padding: 0 14px; font-size: 11px; font-weight: 600; cursor: pointer; }
 .focus-mode-toggle.active { background: var(--thread-soft); border-color: var(--thread); color: var(--thread-ink); }
+.show-more-ancestors { display: block; margin: 6px auto; background: none; border: none; color: var(--thread); font-size: 11px; font-weight: 600; cursor: pointer; }
+.show-more-ancestors:hover { text-decoration: underline; }
 .add-parent-slot { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100px; padding: 8px 4px; border: 1.5px dashed var(--border); border-radius: var(--radius-sm); color: var(--muted); font-size: 9.5px; font-weight: 600; text-align: center; cursor: pointer; margin-bottom: var(--space-md); }
 .add-parent-slot:hover { color: var(--thread); border-color: var(--thread); }
 .gen { display: flex; gap: var(--space-xxl); justify-content: center; align-items: flex-start; }

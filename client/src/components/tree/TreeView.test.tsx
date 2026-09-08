@@ -101,6 +101,7 @@ test('shows an Add Parent slot for a shallower person even when another lineage 
   ]
   const onAddParent = vi.fn()
   render(<TreeView people={asymmetricPeople} relationships={asymmetricRelationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('Show more ancestors'))
   const addParentButtons = screen.getAllByText('Add Parent')
   expect(addParentButtons).toHaveLength(3)
   addParentButtons.forEach((button) => fireEvent.click(button))
@@ -245,6 +246,7 @@ test('focus mode auto-expands a collapsed flap that lives on the spouse side of 
   ]
   render(<TreeView people={extendedPeople} relationships={extendedRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   expect(screen.queryByText('RaviSibling')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByText('Show more ancestors'))
   fireEvent.doubleClick(screen.getByText('RaviParent').closest('.patch')!)
 
   expect(screen.getByText('RaviSibling')).toBeInTheDocument()
@@ -324,4 +326,37 @@ test('the Focus Mode toggle makes a single click focus a person instead of openi
   expect(onOpenProfile).not.toHaveBeenCalled()
   expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
   expect(screen.getByText('Anna').closest('.patch')).toHaveClass('in-focus')
+})
+
+test('ancestor rows deeper than 1 generation stay collapsed by default, with a toggle to reveal more', () => {
+  const withGrandparents = [...people, person('anna_dad', 'AnnaDad'), person('anna_mom', 'AnnaMom')]
+  const relsWithGrandparents: Relationship[] = [
+    ...relationships,
+    { id: 'r8', type: 'spouse', from_id: 'anna_dad', to_id: 'anna_mom' },
+    { id: 'r9', type: 'parent-child', from_id: 'anna_dad', to_id: 'anna' },
+    { id: 'r10', type: 'parent-child', from_id: 'anna_mom', to_id: 'anna' },
+  ]
+  render(<TreeView people={withGrandparents} relationships={relsWithGrandparents} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  expect(screen.queryByText('AnnaDad')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByText('Show more ancestors'))
+  expect(screen.getByText('AnnaDad')).toBeInTheDocument()
+})
+
+test('re-centering resets the ancestor depth and open sibling flaps back to the default', () => {
+  const withGrandparents = [...people, person('anna_dad', 'AnnaDad'), person('anna_mom', 'AnnaMom')]
+  const relsWithGrandparents: Relationship[] = [
+    ...relationships,
+    { id: 'r8', type: 'spouse', from_id: 'anna_dad', to_id: 'anna_mom' },
+    { id: 'r9', type: 'parent-child', from_id: 'anna_dad', to_id: 'anna' },
+    { id: 'r10', type: 'parent-child', from_id: 'anna_mom', to_id: 'anna' },
+  ]
+  const { rerender } = render(<TreeView people={withGrandparents} relationships={relsWithGrandparents} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('Show more ancestors'))
+  expect(screen.getByText('AnnaDad')).toBeInTheDocument()
+  fireEvent.click(screen.getByText('2'))
+  expect(screen.getByText('Sanjay')).toBeInTheDocument()
+
+  rerender(<TreeView people={withGrandparents} relationships={relsWithGrandparents} focalId="sanjay" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+
+  expect(screen.queryByText('AnnaDad')).not.toBeInTheDocument()
 })

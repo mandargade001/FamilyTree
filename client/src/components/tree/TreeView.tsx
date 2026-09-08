@@ -101,8 +101,11 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   const [openFlaps, setOpenFlaps] = useState<Set<string>>(new Set())
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [focusModeEnabled, setFocusModeEnabled] = useState(false)
+  const [maxAncestorDepth, setMaxAncestorDepth] = useState(1)
   const byId = new Map(people.map((p) => [p.id, p]))
   const rows = buildAncestorRows(focalId, relationships)
+  const visibleRows = rows.filter((row) => row.depth <= maxAncestorDepth)
+  const hasMoreAncestors = rows.some((row) => row.depth > maxAncestorDepth)
   const focalChildren = getDescendantIds(focalId, relationships).filter((id) => byId.has(id))
 
   const focusedSet = focusedId ? focusSetFor(focusedId, relationships) : null
@@ -156,6 +159,15 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [focusedId])
+
+  // Re-centering the tree on a new focal person (via a sibling click, an
+  // "Add Parent" flow, etc.) should reset the ancestor window back to just
+  // immediate parents and close any open sibling flaps — an expanded state
+  // built around the previous focal person doesn't make sense for the new one.
+  useEffect(() => {
+    setMaxAncestorDepth(1)
+    setOpenFlaps(new Set())
+  }, [focalId])
 
   // Clicking the tree's background (not a patch/chip/button) also clears
   // focus when active. Interactive elements (patches, flaps, toggles, slots)
@@ -251,7 +263,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           </div>
         </div>
       )}
-      {rows.map((row) => (
+      {visibleRows.map((row) => (
         <div className="gen" key={row.depth}>
           {row.units.map((unit) => {
             const person = byId.get(unit.personId)
@@ -321,6 +333,11 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           })}
         </div>
       ))}
+      {hasMoreAncestors && (
+        <button className="show-more-ancestors" onClick={() => setMaxAncestorDepth((d) => d + 1)}>
+          Show more ancestors
+        </button>
+      )}
     </div>
   )
 }
