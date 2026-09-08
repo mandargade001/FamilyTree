@@ -16,7 +16,21 @@ vi.mock('../lib/supabaseClient', () => ({
   },
 }))
 
-import { uploadPhoto, listPhotos, getPrimaryPhoto } from './photos'
+import { uploadPhoto, listPhotos, getPrimaryPhoto, invalidatePrimaryPhoto } from './photos'
+
+// getPrimaryPhoto caches its result per personId at module scope (see
+// Finding 3 in the final-fix report), so results from an earlier test can
+// otherwise leak into a later one that reuses the same personId. Explicitly
+// invalidate every personId this file exercises before each test to keep
+// tests independent of run order.
+beforeEach(() => {
+  invalidatePrimaryPhoto('meera')
+  invalidatePrimaryPhoto('nobody')
+  invalidatePrimaryPhoto('ravi')
+  mockInvoke.mockClear()
+  mockList.mockClear()
+  mockGetPublicUrl.mockClear()
+})
 
 test('uploadPhoto invokes the upload-photo function with a FormData payload', async () => {
   mockInvoke.mockResolvedValue({ data: { path: 'meera/photo.jpg' }, error: null })
@@ -86,4 +100,58 @@ test('getPrimaryPhoto returns null when the person has no photos', async () => {
 test('getPrimaryPhoto returns null instead of throwing when listing fails', async () => {
   mockList.mockResolvedValue({ data: null, error: new Error('boom') })
   await expect(getPrimaryPhoto('meera')).resolves.toBeNull()
+})
+
+test('getPrimaryPhoto caches per personId, so a second call does not re-invoke Storage list()', async () => {
+  mockList.mockResolvedValue({ data: [{ name: 'a.jpg' }], error: null })
+  mockGetPublicUrl.mockImplementation((path: string) => ({ data: { publicUrl: `https://cdn.example/${path}` } }))
+
+  const first = await getPrimaryPhoto('ravi')
+  const second = await getPrimaryPhoto('ravi')
+
+  expect(mockList).toHaveBeenCalledOnce()
+  expect(first).toBe('https://cdn.example/ravi/a.jpg')
+  expect(second).toBe('https://cdn.example/ravi/a.jpg')
+})
+
+test('getPrimaryPhoto de-dupes concurrent in-flight lookups for the same personId', async () => {
+  let resolveList!: (v: { data: { name: string }[]; error: null }) => void
+  mockList.mockReturnValue(new Promise((resolve) => { resolveList = resolve }))
+  mockGetPublicUrl.mockImplementation((path: string) => ({ data: { publicUrl: `https://cdn.example/${path}` } }))
+
+  const p1 = getPrimaryPhoto('ravi')
+  const p2 = getPrimaryPhoto('ravi')
+  resolveList({ data: [{ name: 'a.jpg' }], error: null })
+
+  await expect(p1).resolves.toBe('https://cdn.example/ravi/a.jpg')
+  await expect(p2).resolves.toBe('https://cdn.example/ravi/a.jpg')
+  expect(mockList).toHaveBeenCalledOnce()
+})
+
+test('invalidatePrimaryPhoto clears the cached entry so the next call re-fetches', async () => {
+  mockList.mockResolvedValue({ data: [{ name: 'a.jpg' }], error: null })
+  mockGetPublicUrl.mockImplementation((path: string) => ({ data: { publicUrl: `https://cdn.example/${path}` } }))
+
+  await getPrimaryPhoto('ravi')
+  invalidatePrimaryPhoto('ravi')
+  mockList.mockResolvedValue({ data: [{ name: 'b.jpg' }], error: null })
+  const url = await getPrimaryPhoto('ravi')
+
+  expect(mockList).toHaveBeenCalledTimes(2)
+  expect(url).toBe('https://cdn.example/ravi/b.jpg')
+})
+
+test('uploadPhoto invalidates the cached primary photo for that person', async () => {
+  mockList.mockResolvedValue({ data: [{ name: 'old.jpg' }], error: null })
+  mockGetPublicUrl.mockImplementation((path: string) => ({ data: { publicUrl: `https://cdn.example/${path}` } }))
+  await getPrimaryPhoto('ravi')
+
+  mockInvoke.mockResolvedValue({ data: { path: 'ravi/new.jpg' }, error: null })
+  await uploadPhoto('ravi', new File(['data'], 'new.jpg', { type: 'image/jpeg' }))
+
+  mockList.mockResolvedValue({ data: [{ name: 'new.jpg' }], error: null })
+  const url = await getPrimaryPhoto('ravi')
+
+  expect(mockList).toHaveBeenCalledTimes(2)
+  expect(url).toBe('https://cdn.example/ravi/new.jpg')
 })
