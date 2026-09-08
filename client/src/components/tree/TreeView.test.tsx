@@ -32,13 +32,13 @@ test('renders the focal person and their parent couple', () => {
 
 test('siblings start collapsed behind a flap showing the correct count', () => {
   render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
-  expect(screen.getByText('2 siblings')).toBeInTheDocument()
+  expect(screen.getByText('2')).toBeInTheDocument()
   expect(screen.queryByText('Sanjay')).not.toBeInTheDocument()
 })
 
 test('clicking the sibling flap reveals the siblings as row-adjacent columns, not nested under the owner', () => {
   const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
-  fireEvent.click(screen.getByText('2 siblings'))
+  fireEvent.click(screen.getByText('2'))
   expect(screen.getByText('Sanjay')).toBeInTheDocument()
   expect(screen.getByText('Deepak')).toBeInTheDocument()
 
@@ -140,8 +140,8 @@ test('shows a sibling flap for the spouse side of a couple, not just the anchor'
     { id: 'r9', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi_sibling' },
   ]
   render(<TreeView people={siblingSpousePeople} relationships={siblingSpouseRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
-  expect(screen.getByText('1 sibling')).toBeInTheDocument()
-  fireEvent.click(screen.getByText('1 sibling'))
+  expect(screen.getByText('1')).toBeInTheDocument()
+  fireEvent.click(screen.getByText('1'))
   expect(screen.getByText('RaviSibling')).toBeInTheDocument()
 })
 
@@ -204,7 +204,7 @@ test('focusing a sibling dims an unrelated person but not the sibling\'s own spo
     { id: 'r9', type: 'parent-child', from_id: 'meera', to_id: 'rohan' },
   ]
   render(<TreeView people={extendedPeople} relationships={extendedRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
-  fireEvent.click(screen.getByText('2 siblings'))
+  fireEvent.click(screen.getByText('2'))
   fireEvent.doubleClick(screen.getByText('Sanjay').closest('.patch')!)
 
   expect(screen.getByText('Sanjay').closest('.patch')).toHaveClass('in-focus')
