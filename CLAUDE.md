@@ -21,6 +21,12 @@ Do this proactively, without being asked each time — it's a standing practice,
 
 When an implementation plan (`docs/superpowers/plans/*.md`) is ready to execute, always use Subagent-Driven Development (`superpowers:subagent-driven-development`) — never ask which execution approach to use; just proceed with it.
 
+## Branch / PR workflow (required practice)
+
+Every change — spec-driven or a small one-off — happens on its own branch, never directly on `master`. At the end (after the final whole-branch review is clean, per Subagent-Driven Development), when `superpowers:finishing-a-development-branch` presents its options, always choose **push and create a PR**, not "merge locally" — push the branch and open a PR against `master` with `gh pr create` for the human maintainer to review. Never merge the PR without the user's explicit go-ahead; wait for them to say the branch is approved (or ask if it's unclear), and use `gh pr merge` at that point rather than merging locally. Once merged, clean up the branch/worktree as usual.
+
+This replaces the earlier "merge to master locally" pattern used before 2026-09-08 — always use the PR path from here on unless the user explicitly asks for a local merge for a specific change.
+
 ## Other conventions
 
 - This project's local database tests run against a native local PostgreSQL install (not Docker/Supabase CLI) — see `README.md` for why and how.
