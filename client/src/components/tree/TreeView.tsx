@@ -284,7 +284,8 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
             const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
             const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
             const label = clusterLabel(person, spouse)
-            const showCluster = row.units.length > 1 || anyHasSiblings
+            const anySiblingsOpen = openFlaps.has(unit.personId) || (spouse ? openFlaps.has(spouse.id) : false)
+            const showCluster = row.units.length > 1 || anySiblingsOpen
 
             const unitContent = (
               <>
