@@ -46,7 +46,7 @@ test('clicking the sibling flap reveals the siblings as row-adjacent columns, no
   const sanjayColumn = screen.getByText('Sanjay').closest('.gen-column')!
   expect(sanjayColumn).not.toBe(meeraColumn)
   expect(sanjayColumn.parentElement).toBe(meeraColumn.parentElement)
-  expect(meeraColumn.parentElement).toHaveClass('gen')
+  expect(meeraColumn.parentElement).toHaveClass('family-cluster')
   expect(container.querySelector('.sibling-list')).not.toBeInTheDocument()
 })
 
@@ -340,6 +340,33 @@ test('ancestor rows deeper than 1 generation stay collapsed by default, with a t
   expect(screen.queryByText('AnnaDad')).not.toBeInTheDocument()
   fireEvent.click(screen.getByText('Show more ancestors'))
   expect(screen.getByText('AnnaDad')).toBeInTheDocument()
+})
+
+test('wraps a row unit with multiple lineages in labeled family clusters', () => {
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    named('anna2', 'Anna', 'Gade'), named('ravi2', 'Ravi', 'Gade'), person('meera2', 'Meera'),
+    named('anna_dad', 'AnnaDad', 'Gade'), named('anna_mom', 'AnnaMom', 'Gade'),
+    named('ravi_dad', 'RaviDad', 'Khandgaonkar'), named('ravi_mom', 'RaviMom', 'Khandgaonkar'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'anna2', to_id: 'ravi2' },
+    { id: 'r2', type: 'parent-child', from_id: 'anna2', to_id: 'meera2' },
+    { id: 'r3', type: 'parent-child', from_id: 'ravi2', to_id: 'meera2' },
+    { id: 'r4', type: 'spouse', from_id: 'anna_dad', to_id: 'anna_mom' },
+    { id: 'r5', type: 'parent-child', from_id: 'anna_dad', to_id: 'anna2' },
+    { id: 'r6', type: 'parent-child', from_id: 'anna_mom', to_id: 'anna2' },
+    { id: 'r7', type: 'spouse', from_id: 'ravi_dad', to_id: 'ravi_mom' },
+    { id: 'r8', type: 'parent-child', from_id: 'ravi_dad', to_id: 'ravi2' },
+    { id: 'r9', type: 'parent-child', from_id: 'ravi_mom', to_id: 'ravi2' },
+  ]
+  render(<TreeView people={clusteredPeople} relationships={clusteredRelationships} focalId="meera2" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('Show more ancestors'))
+
+  const gadeLabel = screen.getByText('Gade')
+  const khandgaonkarLabel = screen.getByText('Khandgaonkar')
+  expect(gadeLabel.closest('.family-cluster')).not.toBe(khandgaonkarLabel.closest('.family-cluster'))
+  expect(gadeLabel.closest('.family-cluster')).not.toBeNull()
 })
 
 test('re-centering resets the ancestor depth and open sibling flaps back to the default', () => {

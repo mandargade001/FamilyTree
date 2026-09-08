@@ -8,6 +8,12 @@ import { CollapseToggle } from './CollapseToggle'
 
 const NEUTRAL_STATE: PersonVisualState = { inFocus: false, dimmed: false }
 
+function clusterLabel(person: Person, spouse: Person | null): string | null {
+  if (!person.last_name) return null
+  if (!spouse) return person.last_name
+  return spouse.last_name === person.last_name ? person.last_name : null
+}
+
 function focusSetFor(personId: string, relationships: Relationship[]): Set<string> {
   const family = computeImmediateFamily(personId, relationships)
   return new Set([
@@ -277,9 +283,11 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
 
             const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
             const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
+            const label = clusterLabel(person, spouse)
+            const showCluster = row.units.length > 1 || anyHasSiblings
 
-            return (
-              <Fragment key={unit.personId}>
+            const unitContent = (
+              <>
                 <div className="gen-column">
                   {anyMissingParent && (
                     <div className="couple-slots">
@@ -328,6 +336,17 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
                 </div>
                 {personSiblingIds.length > 0 && openFlaps.has(unit.personId) && renderSiblingColumns(personSiblingIds, anyMissingParent)}
                 {spouse && spouseSiblingIds.length > 0 && openFlaps.has(spouse.id) && renderSiblingColumns(spouseSiblingIds, anyMissingParent)}
+              </>
+            )
+
+            return (
+              <Fragment key={unit.personId}>
+                {showCluster ? (
+                  <div className="family-cluster">
+                    {label && <div className="family-cluster-label">{label}</div>}
+                    {unitContent}
+                  </div>
+                ) : unitContent}
               </Fragment>
             )
           })}
