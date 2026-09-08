@@ -355,6 +355,7 @@ test("adding a child to someone with a recorded spouse links both parents", asyn
 })
 
 test("adding a child to someone with no recorded spouse only links that one parent", async () => {
+  ;(addRelationship as ReturnType<typeof vi.fn>).mockClear()
   localStorage.setItem('vansh:passphrase', 'test-passphrase')
   ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
     { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
@@ -374,6 +375,7 @@ test("adding a child to someone with no recorded spouse only links that one pare
   fireEvent.click(screen.getByText('Create new person "Rohan"'))
 
   await waitFor(() => expect(addRelationship).toHaveBeenCalledWith('parent-child', 'meera', 'rohan-id'))
+  expect(addRelationship).toHaveBeenCalledTimes(1)
 })
 
 test('linking an existing gendered person as a parent reopens the picker with a role-specific nudge', async () => {
