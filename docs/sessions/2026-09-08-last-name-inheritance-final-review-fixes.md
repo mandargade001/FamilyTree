@@ -35,7 +35,8 @@ Finding 4's fix now makes that a precondition for the write to fire, and added o
 confirming a passphrase-less load never calls `updatePerson`.
 
 **Outcome:** `npm test` (vitest run, non-watch): 18 test files / 159 tests, all passing.
-`npx tsc --noEmit`: clean, no errors. Changes left uncommitted in the working tree (not asked to
-commit): `client/src/lib/lastNameInheritance.ts`, `client/src/lib/lastNameInheritance.test.ts`,
-`client/src/App.tsx`, `client/src/App.test.tsx`. Full detail in
+`npx tsc --noEmit`: clean, no errors. Committed as `e54aa8e` — "Fix five final-review findings on
+last-name inheritance" (`client/src/lib/lastNameInheritance.ts`,
+`client/src/lib/lastNameInheritance.test.ts`, `client/src/App.tsx`, `client/src/App.test.tsx`, plus
+this log entry). Full detail in
 `.superpowers/sdd/2026-09-08-last-name-inheritance/final-fix-report.md`. Nothing left open.
