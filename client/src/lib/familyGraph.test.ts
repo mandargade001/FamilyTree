@@ -63,14 +63,14 @@ test('computeImmediateFamily handles someone with no spouse and no siblings', ()
 
 test('buildAncestorRows returns the focal person alone at depth 0', () => {
   const rows = buildAncestorRows('meera', relationships)
-  expect(rows[0]).toEqual({ depth: 0, units: [{ personId: 'meera', spouseId: null }] })
+  expect(rows[0]).toEqual({ depth: 0, units: [{ personId: 'meera', spouseId: null, childId: null }] })
 })
 
 test('buildAncestorRows walks up through recorded parent couples', () => {
   const rows = buildAncestorRows('meera', relationships)
   // depth 1: Meera's parents, Anna & Ravi, as one couple unit
   const depth1 = rows.find((r) => r.depth === 1)!
-  expect(depth1.units).toEqual([{ personId: 'anna', spouseId: 'ravi' }])
+  expect(depth1.units).toEqual([{ personId: 'anna', spouseId: 'ravi', childId: 'meera' }])
 })
 
 test('buildAncestorRows stops at a generation with no recorded parents', () => {
@@ -85,7 +85,7 @@ test('buildAncestorRows handles someone with only one recorded parent', () => {
   ]
   const rows = buildAncestorRows('solo-child', oneParent)
   const depth1 = rows.find((r) => r.depth === 1)!
-  expect(depth1.units).toEqual([{ personId: 'solo-parent', spouseId: null }])
+  expect(depth1.units).toEqual([{ personId: 'solo-parent', spouseId: null, childId: 'solo-child' }])
 })
 
 test('getDescendantIds returns only direct children, not grandchildren', () => {
