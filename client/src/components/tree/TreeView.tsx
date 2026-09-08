@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useState, type MouseEvent } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import type { Person, Relationship } from '../../types'
 import { buildAncestorRows, computeImmediateFamily, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
 import { Couple, type PersonVisualState } from './Couple'
@@ -13,6 +13,46 @@ function clusterLabel(person: Person, spouse: Person | null): string | null {
   if (!person.last_name) return null
   if (!spouse) return person.last_name
   return spouse.last_name === person.last_name ? person.last_name : null
+}
+
+interface ColumnSegment {
+  id: string
+  label: string | null
+  node: ReactNode
+}
+
+// Groups adjacent same-label segments into one boxed, captioned
+// .family-cluster; a null-label segment (no determinable surname) always
+// stands alone, unboxed, next to whatever's on either side of it. Callers
+// only invoke this when boxing has already been decided as warranted (see
+// `shouldGroup` at the call site) — this function doesn't itself decide
+// whether to box anything, only how to partition segments once boxing is
+// happening.
+function groupSegmentsIntoClusters(segments: ColumnSegment[]): ReactNode {
+  const output: ReactNode[] = []
+  let i = 0
+  while (i < segments.length) {
+    const { label } = segments[i]
+    if (label === null) {
+      output.push(<Fragment key={segments[i].id}>{segments[i].node}</Fragment>)
+      i += 1
+      continue
+    }
+    const run: ReactNode[] = []
+    let j = i
+    while (j < segments.length && segments[j].label === label) {
+      run.push(segments[j].node)
+      j += 1
+    }
+    output.push(
+      <div className="family-cluster" key={segments[i].id}>
+        <div className="family-cluster-label">{label}</div>
+        {run}
+      </div>,
+    )
+    i = j
+  }
+  return output
 }
 
 function focusSetFor(personId: string, relationships: Relationship[]): Set<string> {
@@ -252,26 +292,20 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   // the same `.gen` row needs a same-height reserved spacer above its Couple
   // too, or `align-items: flex-start` on `.gen` leaves the owner's Couple
   // sitting visibly lower than the siblings', undoing Task 3's fix.
-  function renderSiblingColumns(ids: string[], reserveTopSlot: boolean) {
-    return ids.map((sibId) => {
-      const sibling = byId.get(sibId)
-      if (!sibling) return null
-      const sibSpouseId = getSpouseIds(sibId, relationships)[0]
-      const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) : null
-      return (
-        <div className="gen-column" key={sibId}>
-          {reserveTopSlot && <div className="sibling-slot-reserve" aria-hidden="true" />}
-          <Couple
-            person={sibling}
-            spouse={sibSpouse}
-            onOpen={handleSiblingOpen}
-            onDoubleOpen={focusOn}
-            personState={patchState(sibId)}
-            spouseState={sibSpouse ? patchState(sibSpouse.id) : undefined}
-          />
-        </div>
-      )
-    })
+  function renderSiblingColumn(sibId: string, sibling: Person, sibSpouse: Person | null, reserveTopSlot: boolean): ReactNode {
+    return (
+      <div className="gen-column" key={sibId}>
+        {reserveTopSlot && <div className="sibling-slot-reserve" aria-hidden="true" />}
+        <Couple
+          person={sibling}
+          spouse={sibSpouse}
+          onOpen={handleSiblingOpen}
+          onDoubleOpen={focusOn}
+          personState={patchState(sibId)}
+          spouseState={sibSpouse ? patchState(sibSpouse.id) : undefined}
+        />
+      </div>
+    )
   }
 
   return (
@@ -317,80 +351,86 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
 
             const anyMissingParent = !personHasParents || (spouse ? !spouseHasParents : false)
             const anyHasSiblings = personSiblingIds.length > 0 || spouseSiblingIds.length > 0
-            const label = clusterLabel(person, spouse)
-            const anySiblingsOpen = openFlaps.has(unit.personId) || (spouse ? openFlaps.has(spouse.id) : false)
-            const showCluster = row.units.length > 1 || anySiblingsOpen
 
-            const unitContent = (
-              <>
-                <div className="gen-column">
-                  {anyMissingParent && (
-                    <div className="couple-slots">
+            const coupleColumn = (
+              <div className="gen-column" key="couple">
+                {anyMissingParent && (
+                  <div className="couple-slots">
+                    <div className="person-slot">
+                      {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
+                    </div>
+                    {spouse && (
                       <div className="person-slot">
-                        {!personHasParents && <AddParentSlot onClick={() => onAddParent(unit.personId)} />}
+                        {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
                       </div>
-                      {spouse && (
-                        <div className="person-slot">
-                          {!spouseHasParents && <AddParentSlot onClick={() => onAddParent(spouse.id)} />}
-                        </div>
+                    )}
+                  </div>
+                )}
+                <Couple
+                  person={person}
+                  spouse={spouse}
+                  onOpen={handleOpen}
+                  onDoubleOpen={focusOn}
+                  personState={patchState(unit.personId)}
+                  spouseState={spouse ? patchState(spouse.id) : undefined}
+                />
+                {anyHasSiblings && (
+                  <div className="couple-slots">
+                    <div className="person-slot">
+                      {personSiblingIds.length > 0 && (
+                        <SiblingFlap
+                          count={personSiblingIds.length}
+                          open={openFlaps.has(unit.personId)}
+                          onToggle={() => toggleFlap(unit.personId)}
+                        />
                       )}
                     </div>
-                  )}
-                  <Couple
-                    person={person}
-                    spouse={spouse}
-                    onOpen={handleOpen}
-                    onDoubleOpen={focusOn}
-                    personState={patchState(unit.personId)}
-                    spouseState={spouse ? patchState(spouse.id) : undefined}
-                  />
-                  {anyHasSiblings && (
-                    <div className="couple-slots">
+                    {spouse && (
                       <div className="person-slot">
-                        {personSiblingIds.length > 0 && (
+                        {spouseSiblingIds.length > 0 && (
                           <SiblingFlap
-                            count={personSiblingIds.length}
-                            open={openFlaps.has(unit.personId)}
-                            onToggle={() => toggleFlap(unit.personId)}
+                            count={spouseSiblingIds.length}
+                            open={openFlaps.has(spouse.id)}
+                            onToggle={() => toggleFlap(spouse.id)}
                           />
                         )}
                       </div>
-                      {spouse && (
-                        <div className="person-slot">
-                          {spouseSiblingIds.length > 0 && (
-                            <SiblingFlap
-                              count={spouseSiblingIds.length}
-                              open={openFlaps.has(spouse.id)}
-                              onToggle={() => toggleFlap(spouse.id)}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {/* Renders after the sibling-flap/bubble row, not before, so
-                      it visually reads as connecting toward the generation
-                      below rather than terminating at the sibling-count
-                      bubbles. Gated so the depth-0 (focal person's own) row
-                      doesn't dangle a seam toward nothing when the focal
-                      person has no children — every deeper ancestor row unit
-                      always has a recorded child (the row below it), so it's
-                      unconditional there. */}
-                  {(row.depth > 0 || focalChildren.length > 0) && <SeamLine kind="parent-child" />}
-                </div>
-                {personSiblingIds.length > 0 && openFlaps.has(unit.personId) && renderSiblingColumns(personSiblingIds, anyMissingParent)}
-                {spouse && spouseSiblingIds.length > 0 && openFlaps.has(spouse.id) && renderSiblingColumns(spouseSiblingIds, anyMissingParent)}
-              </>
+                    )}
+                  </div>
+                )}
+                {(row.depth > 0 || focalChildren.length > 0) && <SeamLine kind="parent-child" />}
+              </div>
             )
+
+            const segments: ColumnSegment[] = [
+              { id: `couple-${unit.personId}`, label: clusterLabel(person, spouse), node: coupleColumn },
+            ]
+
+            function addSiblingSegments(siblingIds: string[], ownerId: string) {
+              if (siblingIds.length === 0 || !openFlaps.has(ownerId)) return
+              for (const sibId of siblingIds) {
+                const sibling = byId.get(sibId)
+                if (!sibling) continue
+                const sibSpouseId = getSpouseIds(sibId, relationships)[0]
+                const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) ?? null : null
+                segments.push({
+                  id: sibId,
+                  label: clusterLabel(sibling, sibSpouse),
+                  node: renderSiblingColumn(sibId, sibling, sibSpouse, anyMissingParent),
+                })
+              }
+            }
+            addSiblingSegments(personSiblingIds, unit.personId)
+            if (spouse) addSiblingSegments(spouseSiblingIds, spouse.id)
+
+            const distinctLabels = new Set(segments.map((s) => s.label).filter((l): l is string => l !== null))
+            const shouldGroup = row.units.length > 1 || distinctLabels.size >= 2
 
             return (
               <Fragment key={unit.personId}>
-                {showCluster ? (
-                  <div className="family-cluster">
-                    {label && <div className="family-cluster-label">{label}</div>}
-                    {unitContent}
-                  </div>
-                ) : unitContent}
+                {shouldGroup
+                  ? groupSegmentsIntoClusters(segments)
+                  : segments.map((s) => <Fragment key={s.id}>{s.node}</Fragment>)}
               </Fragment>
             )
           })}

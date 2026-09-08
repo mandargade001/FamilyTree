@@ -46,7 +46,10 @@ test('clicking the sibling flap reveals the siblings as row-adjacent columns, no
   const sanjayColumn = screen.getByText('Sanjay').closest('.gen-column')!
   expect(sanjayColumn).not.toBe(meeraColumn)
   expect(sanjayColumn.parentElement).toBe(meeraColumn.parentElement)
-  expect(meeraColumn.parentElement).toHaveClass('family-cluster')
+  // This fixture's people have no last names, so there's nothing to
+  // distinguish — no cluster box is drawn (see the cluster-boundary-fix
+  // spec). The row-adjacency assertions above are what this test verifies.
+  expect(meeraColumn.closest('.family-cluster')).toBeNull()
   expect(container.querySelector('.sibling-list')).not.toBeInTheDocument()
 })
 
@@ -429,6 +432,73 @@ test('wraps a row unit with multiple lineages in labeled family clusters', () =>
   const khandgaonkarLabel = screen.getByText('Khandgaonkar')
   expect(gadeLabel.closest('.family-cluster')).not.toBe(khandgaonkarLabel.closest('.family-cluster'))
   expect(gadeLabel.closest('.family-cluster')).not.toBeNull()
+})
+
+test("a revealed sibling from a different lineage than their married-in relative gets its own separate cluster, not their partner's", () => {
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    person('meera3', 'Meera3'),
+    named('sarika', 'Sarika', 'Gade'), named('mallikarjun', 'Mallikarjun', 'Gade'),
+    named('hanmantrao', 'Hanmantrao', 'Khandgaonkar'), named('saraswati', 'Saraswati', 'Khandgaonkar'),
+    named('santosh', 'Santosh', 'Khandgaonkar'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'sarika', to_id: 'mallikarjun' },
+    { id: 'r2', type: 'parent-child', from_id: 'sarika', to_id: 'meera3' },
+    { id: 'r3', type: 'parent-child', from_id: 'mallikarjun', to_id: 'meera3' },
+    { id: 'r4', type: 'spouse', from_id: 'hanmantrao', to_id: 'saraswati' },
+    { id: 'r5', type: 'parent-child', from_id: 'hanmantrao', to_id: 'sarika' },
+    { id: 'r6', type: 'parent-child', from_id: 'saraswati', to_id: 'sarika' },
+    { id: 'r7', type: 'parent-child', from_id: 'hanmantrao', to_id: 'santosh' },
+    { id: 'r8', type: 'parent-child', from_id: 'saraswati', to_id: 'santosh' },
+  ]
+  render(<TreeView people={clusteredPeople} relationships={clusteredRelationships} focalId="meera3" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+
+  fireEvent.click(screen.getByText('1'))
+  // Santosh has a last name in this fixture, so PersonPatch renders "Santosh
+  // Khandgaonkar" as a single text node (see PersonPatch.tsx's `name` join) —
+  // exact: false matches the substring rather than requiring the whole node
+  // text to equal 'Santosh'.
+  expect(screen.getByText('Santosh', { exact: false })).toBeInTheDocument()
+
+  const gadeLabel = screen.getByText('Gade')
+  const khandgaonkarLabel = screen.getByText('Khandgaonkar')
+  const santoshColumn = screen.getByText('Santosh', { exact: false }).closest('.gen-column')!
+
+  expect(gadeLabel.closest('.family-cluster')).not.toBe(khandgaonkarLabel.closest('.family-cluster'))
+  expect(khandgaonkarLabel.closest('.family-cluster')).toContainElement(santoshColumn)
+  expect(gadeLabel.closest('.family-cluster')).not.toContainElement(santoshColumn)
+})
+
+test('a revealed sibling who shares their partner\'s surname does not get an unnecessary cluster box', () => {
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    person('meera4', 'Meera4'),
+    named('sarika4', 'Sarika4', 'Gade'), named('mallikarjun4', 'Mallikarjun4', 'Gade'),
+    named('madhappa4', 'Madhappa4', 'Gade'), named('nagabai4', 'Nagabai4', 'Gade'),
+    named('shobha4', 'Shobha4', 'Gade'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'sarika4', to_id: 'mallikarjun4' },
+    { id: 'r2', type: 'parent-child', from_id: 'sarika4', to_id: 'meera4' },
+    { id: 'r3', type: 'parent-child', from_id: 'mallikarjun4', to_id: 'meera4' },
+    { id: 'r4', type: 'spouse', from_id: 'madhappa4', to_id: 'nagabai4' },
+    { id: 'r5', type: 'parent-child', from_id: 'madhappa4', to_id: 'mallikarjun4' },
+    { id: 'r6', type: 'parent-child', from_id: 'nagabai4', to_id: 'mallikarjun4' },
+    { id: 'r7', type: 'parent-child', from_id: 'madhappa4', to_id: 'shobha4' },
+    { id: 'r8', type: 'parent-child', from_id: 'nagabai4', to_id: 'shobha4' },
+  ]
+  render(<TreeView people={clusteredPeople} relationships={clusteredRelationships} focalId="meera4" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+
+  fireEvent.click(screen.getByText('1'))
+  // Shobha4 has a last name in this fixture, so PersonPatch renders "Shobha4
+  // Gade" as a single text node (see PersonPatch.tsx's `name` join) —
+  // exact: false matches the substring rather than requiring the whole node
+  // text to equal 'Shobha4'.
+  expect(screen.getByText('Shobha4', { exact: false })).toBeInTheDocument()
+
+  const shobhaColumn = screen.getByText('Shobha4', { exact: false }).closest('.gen-column')!
+  expect(shobhaColumn.closest('.family-cluster')).toBeNull()
 })
 
 test('re-centering resets the ancestor depth, open sibling flaps, and focus state back to the default', () => {
