@@ -326,6 +326,7 @@ export default function App() {
           focalId={focalId}
           onAddParent={(personId) => requirePassphrase(() => setPanel({ kind: 'picker', anchorId: personId }))}
           onOpenProfile={(id) => setPanel({ kind: 'profile', personId: id })}
+          onCenterOn={(id) => setFocalId(id)}
         />
       )}
 

@@ -25,6 +25,7 @@ interface TreeViewProps {
   focalId: string
   onAddParent: (personId: string) => void
   onOpenProfile: (id: string) => void
+  onCenterOn: (id: string) => void
 }
 
 // Renders one descendant and, once expanded, their own children below them.
@@ -96,7 +97,7 @@ function DescendantBranch({
   )
 }
 
-export function TreeView({ people, relationships, focalId, onAddParent, onOpenProfile }: TreeViewProps) {
+export function TreeView({ people, relationships, focalId, onAddParent, onOpenProfile, onCenterOn }: TreeViewProps) {
   const [openFlaps, setOpenFlaps] = useState<Set<string>>(new Set())
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [focusModeEnabled, setFocusModeEnabled] = useState(false)
@@ -211,7 +212,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           <Couple
             person={sibling}
             spouse={sibSpouse}
-            onOpen={handleOpen}
+            onOpen={onCenterOn}
             onDoubleOpen={focusOn}
             personState={patchState(sibId)}
             spouseState={sibSpouse ? patchState(sibSpouse.id) : undefined}

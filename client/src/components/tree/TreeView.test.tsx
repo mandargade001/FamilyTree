@@ -24,20 +24,20 @@ const relationships: Relationship[] = [
 ]
 
 test('renders the focal person and their parent couple', () => {
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   expect(screen.getByText('Meera')).toBeInTheDocument()
   expect(screen.getByText('Anna')).toBeInTheDocument()
   expect(screen.getByText('Ravi')).toBeInTheDocument()
 })
 
 test('siblings start collapsed behind a flap showing the correct count', () => {
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   expect(screen.getByText('2')).toBeInTheDocument()
   expect(screen.queryByText('Sanjay')).not.toBeInTheDocument()
 })
 
 test('clicking the sibling flap reveals the siblings as row-adjacent columns, not nested under the owner', () => {
-  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.click(screen.getByText('2'))
   expect(screen.getByText('Sanjay')).toBeInTheDocument()
   expect(screen.getByText('Deepak')).toBeInTheDocument()
@@ -51,7 +51,7 @@ test('clicking the sibling flap reveals the siblings as row-adjacent columns, no
 })
 
 test('shows an Add Parent slot above a person with no recorded parents', () => {
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   // Anna and Ravi are both parentless in this fixture, so both members of the
   // couple independently get their own slot.
   expect(screen.getAllByText('Add Parent')).toHaveLength(2)
@@ -59,7 +59,7 @@ test('shows an Add Parent slot above a person with no recorded parents', () => {
 
 test('clicking an Add Parent slot calls onAddParent with that specific person', () => {
   const onAddParent = vi.fn()
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   const addParentButtons = screen.getAllByText('Add Parent')
   fireEvent.click(addParentButtons[0])
   expect(onAddParent).toHaveBeenCalledWith('anna')
@@ -68,7 +68,7 @@ test('clicking an Add Parent slot calls onAddParent with that specific person', 
 test("renders the focal person's own children by default, below them", () => {
   const withChild = [...people, person('rohan', 'Rohan')]
   const relsWithChild: Relationship[] = [...relationships, { id: 'r8', type: 'parent-child', from_id: 'meera', to_id: 'rohan' }]
-  render(<TreeView people={withChild} relationships={relsWithChild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={withChild} relationships={relsWithChild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   expect(screen.getByText('Rohan')).toBeInTheDocument()
 })
 
@@ -79,7 +79,7 @@ test("a child's own children stay collapsed behind a toggle until clicked", () =
     { id: 'r8', type: 'parent-child', from_id: 'meera', to_id: 'rohan' },
     { id: 'r9', type: 'parent-child', from_id: 'rohan', to_id: 'aditi' },
   ]
-  render(<TreeView people={withGrandchild} relationships={relsWithGrandchild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={withGrandchild} relationships={relsWithGrandchild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   expect(screen.queryByText('Aditi')).not.toBeInTheDocument()
   fireEvent.click(screen.getByLabelText('Show Rohan’s children'))
   expect(screen.getByText('Aditi')).toBeInTheDocument()
@@ -100,7 +100,7 @@ test('shows an Add Parent slot for a shallower person even when another lineage 
     { id: 'r10', type: 'parent-child', from_id: 'ravi_mom', to_id: 'ravi' },
   ]
   const onAddParent = vi.fn()
-  render(<TreeView people={asymmetricPeople} relationships={asymmetricRelationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} />)
+  render(<TreeView people={asymmetricPeople} relationships={asymmetricRelationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   const addParentButtons = screen.getAllByText('Add Parent')
   expect(addParentButtons).toHaveLength(3)
   addParentButtons.forEach((button) => fireEvent.click(button))
@@ -123,7 +123,7 @@ test('shows an Add Parent slot for the spouse side of a couple, not just the anc
     { id: 'r10', type: 'parent-child', from_id: 'anna_mom', to_id: 'anna' },
   ]
   const onAddParent = vi.fn()
-  render(<TreeView people={spousePeople} relationships={spouseRelationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} />)
+  render(<TreeView people={spousePeople} relationships={spouseRelationships} focalId="meera" onAddParent={onAddParent} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   screen.getAllByText('Add Parent').forEach((button) => fireEvent.click(button))
   expect(onAddParent).toHaveBeenCalledWith('ravi')
   expect(onAddParent).not.toHaveBeenCalledWith('anna')
@@ -139,14 +139,33 @@ test('shows a sibling flap for the spouse side of a couple, not just the anchor'
     { id: 'r8', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi' },
     { id: 'r9', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi_sibling' },
   ]
-  render(<TreeView people={siblingSpousePeople} relationships={siblingSpouseRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={siblingSpousePeople} relationships={siblingSpouseRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   expect(screen.getByText('1')).toBeInTheDocument()
   fireEvent.click(screen.getByText('1'))
   expect(screen.getByText('RaviSibling')).toBeInTheDocument()
 })
 
+test('clicking a sibling in an opened flap calls onCenterOn instead of onOpenProfile', () => {
+  const onCenterOn = vi.fn()
+  const onOpenProfile = vi.fn()
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={onCenterOn} />)
+  fireEvent.click(screen.getByText('2'))
+  fireEvent.click(screen.getByText('Sanjay').closest('.patch')!)
+  expect(onCenterOn).toHaveBeenCalledWith('sanjay')
+  expect(onOpenProfile).not.toHaveBeenCalled()
+})
+
+test('double-clicking a sibling in an opened flap still focuses them, not recenters', () => {
+  const onCenterOn = vi.fn()
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={onCenterOn} />)
+  fireEvent.click(screen.getByText('2'))
+  fireEvent.doubleClick(screen.getByText('Sanjay').closest('.patch')!)
+  expect(screen.getByText('Sanjay').closest('.patch')).toHaveClass('in-focus')
+  expect(onCenterOn).not.toHaveBeenCalled()
+})
+
 test('double-clicking a person focuses their immediate family and dims everyone else', () => {
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
 
   expect(screen.getByText('Anna').closest('.patch')).toHaveClass('in-focus')
@@ -155,14 +174,14 @@ test('double-clicking a person focuses their immediate family and dims everyone 
 })
 
 test('focus mode auto-expands a collapsed sibling flap to reveal a focused sibling', () => {
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.doubleClick(screen.getByText('Anna').closest('.patch')!)
   expect(screen.getByText('Sanjay')).toBeInTheDocument()
   expect(screen.getByText('Sanjay').closest('.patch')).toHaveClass('in-focus')
 })
 
 test('Exit focus clears the focused state', () => {
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
   fireEvent.click(screen.getByText('Exit focus'))
   expect(screen.getByText('Meera').closest('.patch')).not.toHaveClass('in-focus')
@@ -171,7 +190,7 @@ test('Exit focus clears the focused state', () => {
 test('double-clicking the focal person also glows their own children below them', () => {
   const withChild = [...people, person('rohan', 'Rohan')]
   const relsWithChild: Relationship[] = [...relationships, { id: 'r8', type: 'parent-child', from_id: 'meera', to_id: 'rohan' }]
-  render(<TreeView people={withChild} relationships={relsWithChild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={withChild} relationships={relsWithChild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
   expect(screen.getByText('Rohan').closest('.patch')).toHaveClass('in-focus')
 })
@@ -181,7 +200,7 @@ test('double-clicking the spouse side of the ancestor couple focuses the anchor 
   // (spouseId), per buildAncestorRows' ordering. Double-clicking Ravi's
   // patch — the spouse side, not the anchor — must still glow Anna, proving
   // Couple threads inFocus/dimmed independently to both sides.
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.doubleClick(screen.getByText('Ravi').closest('.patch')!)
 
   expect(screen.getByText('Ravi').closest('.patch')).toHaveClass('in-focus')
@@ -203,7 +222,7 @@ test('focusing a sibling dims an unrelated person but not the sibling\'s own spo
     { id: 'r8', type: 'spouse', from_id: 'sanjay', to_id: 'priya' },
     { id: 'r9', type: 'parent-child', from_id: 'meera', to_id: 'rohan' },
   ]
-  render(<TreeView people={extendedPeople} relationships={extendedRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={extendedPeople} relationships={extendedRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.click(screen.getByText('2'))
   fireEvent.doubleClick(screen.getByText('Sanjay').closest('.patch')!)
 
@@ -224,7 +243,7 @@ test('focus mode auto-expands a collapsed flap that lives on the spouse side of 
     { id: 'r8', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi' },
     { id: 'r9', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi_sibling' },
   ]
-  render(<TreeView people={extendedPeople} relationships={extendedRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={extendedPeople} relationships={extendedRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   expect(screen.queryByText('RaviSibling')).not.toBeInTheDocument()
   fireEvent.doubleClick(screen.getByText('RaviParent').closest('.patch')!)
 
@@ -233,7 +252,7 @@ test('focus mode auto-expands a collapsed flap that lives on the spouse side of 
 })
 
 test('pressing Escape clears the focused state', () => {
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
   expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
 
@@ -244,7 +263,7 @@ test('pressing Escape clears the focused state', () => {
 })
 
 test('clicking the tree background clears the focused state', () => {
-  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
   expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
 
@@ -255,7 +274,7 @@ test('clicking the tree background clears the focused state', () => {
 
 test('clicking a patch while focused does not clear focus via the background handler', () => {
   const onOpenProfile = vi.fn()
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={() => {}} />)
   fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
   expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
 
@@ -286,7 +305,7 @@ test('shows the fresh-stitch badge for a recently-updated person and not for a s
     person('deepak', 'Deepak', staleAt),
   ]
   try {
-    render(<TreeView people={freshPeople} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} />)
+    render(<TreeView people={freshPeople} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
 
     expect(screen.getByText('Anna').closest('.patch')!.querySelector('.fresh-badge')).toBeInTheDocument()
     expect(screen.getByText('Ravi').closest('.patch')!.querySelector('.fresh-badge')).not.toBeInTheDocument()
@@ -298,7 +317,7 @@ test('shows the fresh-stitch badge for a recently-updated person and not for a s
 
 test('the Focus Mode toggle makes a single click focus a person instead of opening their profile', () => {
   const onOpenProfile = vi.fn()
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} />)
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={() => {}} />)
   fireEvent.click(screen.getByText('Focus Mode'))
   fireEvent.click(screen.getByText('Meera').closest('.patch')!)
 
