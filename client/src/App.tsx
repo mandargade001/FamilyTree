@@ -10,7 +10,7 @@ import { PersonForm } from './components/form/PersonForm'
 import { RelationshipPicker, type PickKind } from './components/picker/RelationshipPicker'
 import { PassphraseGate } from './components/gate/PassphraseGate'
 import { Icon } from './components/shared/Icon'
-import { getParentIds } from './lib/familyGraph'
+import { getParentIds, getSpouseIds } from './lib/familyGraph'
 import { parentRoleLabel } from './lib/relationshipLabels'
 
 type Panel =
@@ -157,8 +157,15 @@ export default function App() {
       // The picked/created person becomes the parent of the anchor.
       await addRelationship('parent-child', otherId, anchorId)
     } else if (kind === 'child') {
-      // The anchor becomes the parent of the picked/created person.
+      // The anchor becomes the parent of the picked/created person — and,
+      // if the anchor has a recorded spouse, the spouse becomes a parent
+      // too, since a child's other parent is assumed to be whoever the
+      // anchor is currently married to.
       await addRelationship('parent-child', anchorId, otherId)
+      const spouseId = getSpouseIds(anchorId, relationships)[0]
+      if (spouseId) {
+        await addRelationship('parent-child', spouseId, otherId)
+      }
     } else if (kind === 'sibling') {
       // The picked/created person becomes a parent-child of each of the
       // anchor's own recorded parents (using relationships as it stood

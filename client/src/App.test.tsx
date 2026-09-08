@@ -328,6 +328,54 @@ test('retrying a sibling add after a partial failure completes the remaining par
   expect(screen.queryByText("They're already linked that way.")).not.toBeInTheDocument()
 })
 
+test("adding a child to someone with a recorded spouse links both parents", async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'ravi', first_name: 'Ravi', last_name: null, gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'spouse', from_id: 'meera', to_id: 'ravi' },
+  ])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Meera Gade')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Meera Gade'))
+  await waitFor(() => expect(screen.getByText('Add relationship')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('rohan-id')
+  fireEvent.click(screen.getByText('Child'))
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Rohan' } })
+  fireEvent.click(screen.getByText('Create new person "Rohan"'))
+
+  await waitFor(() => expect(addRelationship).toHaveBeenCalledWith('parent-child', 'meera', 'rohan-id'))
+  await waitFor(() => expect(addRelationship).toHaveBeenCalledWith('parent-child', 'ravi', 'rohan-id'))
+})
+
+test("adding a child to someone with no recorded spouse only links that one parent", async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'meera', first_name: 'Meera', last_name: 'Gade', gender: null, birth_date: '1955', death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Meera Gade')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Meera Gade'))
+  await waitFor(() => expect(screen.getByText('Add relationship')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Meera')).toBeInTheDocument())
+
+  ;(addPerson as ReturnType<typeof vi.fn>).mockResolvedValueOnce('rohan-id')
+  fireEvent.click(screen.getByText('Child'))
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Rohan' } })
+  fireEvent.click(screen.getByText('Create new person "Rohan"'))
+
+  await waitFor(() => expect(addRelationship).toHaveBeenCalledWith('parent-child', 'meera', 'rohan-id'))
+})
+
 test('linking an existing gendered person as a parent reopens the picker with a role-specific nudge', async () => {
   // Reachable path: the linked person already exists with a recorded gender
   // (unlike a freshly-created person, whose gender is always null), so the
