@@ -516,3 +516,45 @@ test('deleting the focal person returns to the bare tree view', async () => {
   await waitFor(() => expect(deletePerson).toHaveBeenCalledWith('meera'))
   await waitFor(() => expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument())
 })
+
+test('loading the app backfills a blank last name the relationship graph already resolves', async () => {
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'father', first_name: 'Ravi', last_name: 'Gade', gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'son', first_name: 'Omkar', last_name: null, gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'parent-child', from_id: 'father', to_id: 'son' },
+  ])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Ravi Gade')).toBeInTheDocument())
+
+  await waitFor(() => expect(updatePerson).toHaveBeenCalledWith('son', expect.objectContaining({ last_name: 'Gade' })))
+})
+
+test('editing a person to set their gender resolves their blank last name from their father', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(fetchPeople as ReturnType<typeof vi.fn>)
+    .mockResolvedValueOnce([
+      { id: 'father', first_name: 'Ravi', last_name: 'Gade', gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+      { id: 'son', first_name: 'Omkar', last_name: null, gender: null, birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    ])
+    .mockResolvedValueOnce([
+      { id: 'father', first_name: 'Ravi', last_name: 'Gade', gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+      { id: 'son', first_name: 'Omkar', last_name: null, gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>)
+    .mockResolvedValueOnce([{ id: 'r1', type: 'parent-child', from_id: 'father', to_id: 'son' }])
+    .mockResolvedValueOnce([{ id: 'r1', type: 'parent-child', from_id: 'father', to_id: 'son' }])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Ravi Gade')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Omkar'))
+  await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Edit Profile'))
+  await waitFor(() => expect(screen.getByText('Edit Person')).toBeInTheDocument())
+
+  fireEvent.change(screen.getByLabelText('Gender'), { target: { value: 'Male' } })
+  fireEvent.click(screen.getByText('Save'))
+
+  await waitFor(() => expect(updatePerson).toHaveBeenCalledWith('son', expect.objectContaining({ last_name: 'Gade' })))
+})

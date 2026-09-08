@@ -11,6 +11,7 @@ import { RelationshipPicker, type PickKind } from './components/picker/Relations
 import { PassphraseGate } from './components/gate/PassphraseGate'
 import { Icon } from './components/shared/Icon'
 import { getParentIds, getSpouseIds } from './lib/familyGraph'
+import { resolveLastNames } from './lib/lastNameInheritance'
 import { parentRoleLabel } from './lib/relationshipLabels'
 
 type Panel =
@@ -83,6 +84,7 @@ export default function App() {
       setRelationships(relRows)
       if (peopleRows.length > 0) setFocalId((prev) => prev ?? peopleRows[0].id)
       setLoadState('loaded')
+      void reconcileLastNames(peopleRows, relRows)
     } catch (err) {
       // Deliberately do NOT fall through to the empty-state UI here — that would
       // invite re-entering data that may already exist. Show a distinct
@@ -105,6 +107,32 @@ export default function App() {
     setPeople(newPeople)
     setRelationships(newRelationships)
     return { people: newPeople, relationships: newRelationships }
+  }
+
+  // After any edit that could make a previously-unresolved last name
+  // resolvable (a new parent-child/spouse link, or a gender change), persist
+  // any newly-resolved names and reflect them in state. Safe to call after
+  // every relevant write since resolveLastNames only ever fills a blank
+  // field — a call that resolves nothing is a no-op past its first line.
+  async function reconcileLastNames(currentPeople: Person[], currentRelationships: Relationship[]) {
+    const updates = resolveLastNames(currentPeople, currentRelationships)
+    if (updates.length === 0) return
+    const byId = new Map(currentPeople.map((p) => [p.id, p]))
+    for (const update of updates) {
+      const person = byId.get(update.id)
+      if (!person) continue
+      await updatePerson(person.id, {
+        first_name: person.first_name,
+        last_name: update.last_name,
+        gender: person.gender,
+        birth_date: person.birth_date,
+        death_date: person.death_date,
+        birth_place: person.birth_place,
+        occupation: person.occupation,
+        bio: person.bio,
+      })
+    }
+    await refresh()
   }
 
   // Centralizes save-failure handling: a write rejected specifically for an
@@ -131,14 +159,16 @@ export default function App() {
       setErrorMessage(null)
       if (editingId) {
         await updatePerson(editingId, fields)
-        await refresh()
+        const { people: freshPeople, relationships: freshRelationships } = await refresh()
+        await reconcileLastNames(freshPeople, freshRelationships)
         // Editing was launched from a profile panel — return there rather than
         // dropping the user back on the bare tree.
         setPanel({ kind: 'profile', personId: editingId })
       } else {
         const newId = await addPerson(fields)
         if (!focalId) setFocalId(newId)
-        await refresh()
+        const { people: freshPeople, relationships: freshRelationships } = await refresh()
+        await reconcileLastNames(freshPeople, freshRelationships)
         // The standalone "+ Add Person" flow creates a person with no
         // relationship yet — land on their own profile so they're immediately
         // visible and editable, rather than leaving them an orphan only
@@ -197,6 +227,7 @@ export default function App() {
     }
 
     const { people: freshPeople, relationships: freshRelationships } = await refresh()
+    await reconcileLastNames(freshPeople, freshRelationships)
 
     if (kind === 'parent') {
       const parentIds = getParentIds(anchorId, freshRelationships)
