@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type MouseEvent } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useState, type MouseEvent } from 'react'
 import type { Person, Relationship } from '../../types'
 import { buildAncestorRows, computeImmediateFamily, getParentIds, getSiblingIds, getSpouseIds, getDescendantIds } from '../../lib/familyGraph'
 import { Couple, type PersonVisualState } from './Couple'
@@ -74,7 +74,6 @@ function DescendantBranch({
         personState={stateFor(personId)}
         spouseState={spouse ? stateFor(spouse.id) : undefined}
       >
-        {childIds.length > 0 && <SeamLine kind="parent-child" />}
         {childIds.length > 0 && (
           <CollapseToggle
             expanded={expanded}
@@ -83,6 +82,17 @@ function DescendantBranch({
           />
         )}
       </Couple>
+      {/* This seam represents the connection UP to this person's own parent,
+          which always exists for anyone rendered in DescendantBranch (they're
+          only here because they ARE someone's child) — so it renders
+          unconditionally, not gated on having children of their own. It must
+          be a sibling of <Couple>, not a child passed into it: <Couple>
+          renders its children inside `.couple`, a horizontal flex row, which
+          would lay the seam out sideways next to the spouse patch instead of
+          above/below the couple. `.gen-column` (this component's own
+          wrapper) is vertical-flex, matching the ancestor-row seam's correct
+          placement. */}
+      <SeamLine kind="parent-child" />
       {expanded && childIds.length > 0 && (
         <div className="descendants">
           <div className="gen">
@@ -170,11 +180,21 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
 
   // Re-centering the tree on a new focal person (via a sibling click, an
   // "Add Parent" flow, etc.) should reset the ancestor window back to just
-  // immediate parents and close any open sibling flaps — an expanded state
-  // built around the previous focal person doesn't make sense for the new one.
-  useEffect(() => {
+  // immediate parents, close any open sibling flaps, and clear any active
+  // Focus Mode dimming — an expanded/focused state built around the previous
+  // focal person doesn't make sense for the new one (stale dimming plus a
+  // lingering "Exit focus" button that no longer refers to anything
+  // sensible). This must run via useLayoutEffect, not useEffect: a plain
+  // effect runs after the browser paints, so the FIRST paint after
+  // `focalId` changes would still show the new focal person's tree combined
+  // with the OLD depth/flaps/focus state — a visible flash/jump before the
+  // reset effect runs and triggers a second paint. useLayoutEffect runs
+  // synchronously before paint, so the reset is applied before the user ever
+  // sees the stale intermediate state.
+  useLayoutEffect(() => {
     setMaxAncestorDepth(1)
     setOpenFlaps(new Set())
+    setFocusedId(null)
   }, [focalId])
 
   // Clicking the tree's background (not a patch/chip/button) also clears
@@ -185,7 +205,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   function handleBackgroundClick(e: MouseEvent<HTMLDivElement>) {
     if (!focusedId) return
     const target = e.target as HTMLElement
-    if (target.closest('.patch, .flap, .rel-chip, .collapse-dot, .add-parent-slot, button')) return
+    if (target.closest('.patch, .rel-chip, .collapse-dot, .add-parent-slot, button')) return
     clearFocus()
   }
 
@@ -202,6 +222,18 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
       focusOn(personId)
     } else {
       onOpenProfile(personId)
+    }
+  }
+
+  // Sibling-column patches single-click to re-center the tree instead of
+  // opening a profile — but that must still respect Focus Mode the same way
+  // handleOpen does for every other patch, or toggling Focus Mode on and
+  // clicking a sibling silently keeps re-centering instead of focusing.
+  function handleSiblingOpen(personId: string) {
+    if (focusModeEnabled) {
+      focusOn(personId)
+    } else {
+      onCenterOn(personId)
     }
   }
 
@@ -232,7 +264,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           <Couple
             person={sibling}
             spouse={sibSpouse}
-            onOpen={onCenterOn}
+            onOpen={handleSiblingOpen}
             onDoubleOpen={focusOn}
             personState={patchState(sibId)}
             spouseState={sibSpouse ? patchState(sibSpouse.id) : undefined}
@@ -312,7 +344,6 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
                     personState={patchState(unit.personId)}
                     spouseState={spouse ? patchState(spouse.id) : undefined}
                   />
-                  <SeamLine kind="parent-child" />
                   {anyHasSiblings && (
                     <div className="couple-slots">
                       <div className="person-slot">
@@ -337,6 +368,15 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
                       )}
                     </div>
                   )}
+                  {/* Renders after the sibling-flap/bubble row, not before, so
+                      it visually reads as connecting toward the generation
+                      below rather than terminating at the sibling-count
+                      bubbles. Gated so the depth-0 (focal person's own) row
+                      doesn't dangle a seam toward nothing when the focal
+                      person has no children — every deeper ancestor row unit
+                      always has a recorded child (the row below it), so it's
+                      unconditional there. */}
+                  {(row.depth > 0 || focalChildren.length > 0) && <SeamLine kind="parent-child" />}
                 </div>
                 {personSiblingIds.length > 0 && openFlaps.has(unit.personId) && renderSiblingColumns(personSiblingIds, anyMissingParent)}
                 {spouse && spouseSiblingIds.length > 0 && openFlaps.has(spouse.id) && renderSiblingColumns(spouseSiblingIds, anyMissingParent)}

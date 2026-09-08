@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { PersonPatch } from './PersonPatch'
 import type { Person } from '../../types'
 
@@ -22,15 +22,42 @@ test('renders the name and birth-death years', () => {
   expect(screen.getByText('b. 1955')).toBeInTheDocument()
 })
 
-test('fires onOpen on click and onDoubleOpen on double-click', () => {
-  const onOpen = vi.fn()
-  const onDoubleOpen = vi.fn()
-  render(<PersonPatch person={meera} inFocus={false} dimmed={false} fresh={false} onOpen={onOpen} onDoubleOpen={onDoubleOpen} />)
-  const patch = screen.getByText('Meera Gade').closest('.patch')!
-  fireEvent.click(patch)
-  fireEvent.doubleClick(patch)
-  expect(onOpen).toHaveBeenCalledWith('meera')
-  expect(onDoubleOpen).toHaveBeenCalledWith('meera')
+test('a lone click fires onOpen after the debounce window, with no onDoubleOpen', async () => {
+  vi.useFakeTimers()
+  try {
+    const onOpen = vi.fn()
+    const onDoubleOpen = vi.fn()
+    render(<PersonPatch person={meera} inFocus={false} dimmed={false} fresh={false} onOpen={onOpen} onDoubleOpen={onDoubleOpen} />)
+    const patch = screen.getByText('Meera Gade').closest('.patch')!
+    fireEvent.click(patch)
+    expect(onOpen).not.toHaveBeenCalled()
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    expect(onOpen).toHaveBeenCalledWith('meera')
+    expect(onDoubleOpen).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('a real double-click (click, click, dblclick) fires only onDoubleOpen, never onOpen', async () => {
+  // A real browser dispatches `click` twice before `dblclick` — model that
+  // sequence directly (fireEvent.doubleClick alone only dispatches a lone
+  // `dblclick` and would not exercise the debounce/cancel logic at all).
+  vi.useFakeTimers()
+  try {
+    const onOpen = vi.fn()
+    const onDoubleOpen = vi.fn()
+    render(<PersonPatch person={meera} inFocus={false} dimmed={false} fresh={false} onOpen={onOpen} onDoubleOpen={onDoubleOpen} />)
+    const patch = screen.getByText('Meera Gade').closest('.patch')!
+    fireEvent.click(patch)
+    fireEvent.click(patch)
+    fireEvent.doubleClick(patch)
+    expect(onDoubleOpen).toHaveBeenCalledWith('meera')
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(onOpen).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('shows the fresh-stitch badge only when fresh is true', () => {

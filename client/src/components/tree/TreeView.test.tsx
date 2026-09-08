@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { TreeView } from './TreeView'
 import type { Person, Relationship } from '../../types'
 
@@ -146,23 +146,52 @@ test('shows a sibling flap for the spouse side of a couple, not just the anchor'
   expect(screen.getByText('RaviSibling')).toBeInTheDocument()
 })
 
-test('clicking a sibling in an opened flap calls onCenterOn instead of onOpenProfile', () => {
-  const onCenterOn = vi.fn()
-  const onOpenProfile = vi.fn()
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={onCenterOn} />)
-  fireEvent.click(screen.getByText('2'))
-  fireEvent.click(screen.getByText('Sanjay').closest('.patch')!)
-  expect(onCenterOn).toHaveBeenCalledWith('sanjay')
-  expect(onOpenProfile).not.toHaveBeenCalled()
+test('clicking a sibling in an opened flap calls onCenterOn instead of onOpenProfile', async () => {
+  // PersonPatch holds a single click's onOpen call behind a ~250ms timer (so
+  // a real double-click's first `click` doesn't fire the recenter before the
+  // `dblclick` arrives) — advance past that window for the single-click side
+  // effect to actually land.
+  vi.useFakeTimers()
+  try {
+    const onCenterOn = vi.fn()
+    const onOpenProfile = vi.fn()
+    render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={onCenterOn} />)
+    fireEvent.click(screen.getByText('2'))
+    fireEvent.click(screen.getByText('Sanjay').closest('.patch')!)
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    expect(onCenterOn).toHaveBeenCalledWith('sanjay')
+    expect(onOpenProfile).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
-test('double-clicking a sibling in an opened flap still focuses them, not recenters', () => {
-  const onCenterOn = vi.fn()
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={onCenterOn} />)
-  fireEvent.click(screen.getByText('2'))
-  fireEvent.doubleClick(screen.getByText('Sanjay').closest('.patch')!)
-  expect(screen.getByText('Sanjay').closest('.patch')).toHaveClass('in-focus')
-  expect(onCenterOn).not.toHaveBeenCalled()
+test('a real double-click sequence on a sibling (click, click, dblclick) focuses them and never recenters', async () => {
+  // fireEvent.doubleClick alone dispatches only a lone `dblclick`, which
+  // doesn't model a real browser: an actual double-click always fires
+  // `click` twice (mousedown/mouseup/click, twice) before `dblclick`. Firing
+  // that real sequence on the same element is what actually proves
+  // PersonPatch's debounce works — a shallower test using only
+  // fireEvent.doubleClick would pass even without the fix, since it never
+  // exercises the `click` events that the fix exists to guard against.
+  vi.useFakeTimers()
+  try {
+    const onCenterOn = vi.fn()
+    render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={onCenterOn} />)
+    fireEvent.click(screen.getByText('2'))
+    const sanjayPatch = screen.getByText('Sanjay').closest('.patch')!
+    fireEvent.click(sanjayPatch)
+    fireEvent.click(sanjayPatch)
+    fireEvent.doubleClick(sanjayPatch)
+    // Advance well past the single-click debounce window to prove no
+    // orphaned timer from either of the two `click` events survives to fire
+    // onCenterOn late.
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(sanjayPatch).toHaveClass('in-focus')
+    expect(onCenterOn).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('double-clicking a person focuses their immediate family and dims everyone else', () => {
@@ -274,19 +303,26 @@ test('clicking the tree background clears the focused state', () => {
   expect(screen.getByText('Meera').closest('.patch')).not.toHaveClass('in-focus')
 })
 
-test('clicking a patch while focused does not clear focus via the background handler', () => {
-  const onOpenProfile = vi.fn()
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={() => {}} />)
-  fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
-  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+test('clicking a patch while focused does not clear focus via the background handler', async () => {
+  vi.useFakeTimers()
+  try {
+    const onOpenProfile = vi.fn()
+    render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={() => {}} />)
+    fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
+    expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
 
-  // A plain single click on a patch (focus mode off) opens the profile — the
-  // click bubbles to the tree background handler too, which must not also
-  // clear focus out from under it.
-  fireEvent.click(screen.getByText('Anna').closest('.patch')!)
+    // A plain single click on a patch (focus mode off) opens the profile —
+    // the click bubbles to the tree background handler too, which must not
+    // also clear focus out from under it. The single-click side effect is
+    // held behind PersonPatch's ~250ms debounce timer, so advance past it.
+    fireEvent.click(screen.getByText('Anna').closest('.patch')!)
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
 
-  expect(onOpenProfile).toHaveBeenCalledWith('anna')
-  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+    expect(onOpenProfile).toHaveBeenCalledWith('anna')
+    expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('shows the fresh-stitch badge for a recently-updated person and not for a stale one, on both sides of a couple', () => {
@@ -317,15 +353,41 @@ test('shows the fresh-stitch badge for a recently-updated person and not for a s
   }
 })
 
-test('the Focus Mode toggle makes a single click focus a person instead of opening their profile', () => {
-  const onOpenProfile = vi.fn()
-  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={() => {}} />)
-  fireEvent.click(screen.getByText('Focus Mode'))
-  fireEvent.click(screen.getByText('Meera').closest('.patch')!)
+test('the Focus Mode toggle makes a single click focus a person instead of opening their profile', async () => {
+  vi.useFakeTimers()
+  try {
+    const onOpenProfile = vi.fn()
+    render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={onOpenProfile} onCenterOn={() => {}} />)
+    fireEvent.click(screen.getByText('Focus Mode'))
+    fireEvent.click(screen.getByText('Meera').closest('.patch')!)
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
 
-  expect(onOpenProfile).not.toHaveBeenCalled()
-  expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
-  expect(screen.getByText('Anna').closest('.patch')).toHaveClass('in-focus')
+    expect(onOpenProfile).not.toHaveBeenCalled()
+    expect(screen.getByText('Meera').closest('.patch')).toHaveClass('in-focus')
+    expect(screen.getByText('Anna').closest('.patch')).toHaveClass('in-focus')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('the Focus Mode toggle makes a single click on a sibling patch focus them instead of re-centering', async () => {
+  // Fix 7: the sibling column's onOpen was wired straight to onCenterOn,
+  // bypassing the same Focus Mode check every other patch goes through —
+  // this proves a sibling patch now respects the toggle too.
+  vi.useFakeTimers()
+  try {
+    const onCenterOn = vi.fn()
+    render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={onCenterOn} />)
+    fireEvent.click(screen.getByText('2'))
+    fireEvent.click(screen.getByText('Focus Mode'))
+    fireEvent.click(screen.getByText('Sanjay').closest('.patch')!)
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+
+    expect(onCenterOn).not.toHaveBeenCalled()
+    expect(screen.getByText('Sanjay').closest('.patch')).toHaveClass('in-focus')
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('ancestor rows deeper than 1 generation stay collapsed by default, with a toggle to reveal more', () => {
@@ -369,7 +431,7 @@ test('wraps a row unit with multiple lineages in labeled family clusters', () =>
   expect(gadeLabel.closest('.family-cluster')).not.toBeNull()
 })
 
-test('re-centering resets the ancestor depth and open sibling flaps back to the default', () => {
+test('re-centering resets the ancestor depth, open sibling flaps, and focus state back to the default', () => {
   const withGrandparents = [...people, person('anna_dad', 'AnnaDad'), person('anna_mom', 'AnnaMom')]
   const relsWithGrandparents: Relationship[] = [
     ...relationships,
@@ -382,24 +444,59 @@ test('re-centering resets the ancestor depth and open sibling flaps back to the 
   expect(screen.getByText('AnnaDad')).toBeInTheDocument()
   fireEvent.click(screen.getByText('2'))
   expect(screen.getByText('Sanjay')).toBeInTheDocument()
+  fireEvent.doubleClick(screen.getByText('Meera').closest('.patch')!)
+  expect(screen.getByText('Exit focus')).toBeInTheDocument()
 
   rerender(<TreeView people={withGrandparents} relationships={relsWithGrandparents} focalId="sanjay" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
 
+  // Ancestor depth reset: the previously-revealed grandparent row is gone.
   expect(screen.queryByText('AnnaDad')).not.toBeInTheDocument()
+  // Open sibling flaps reset: Meera, previously revealed as Sanjay's sibling
+  // via the opened flap, is no longer in the document after re-centering to
+  // a different person's tree.
+  expect(screen.queryByText('Meera')).not.toBeInTheDocument()
+  // Focus state reset (Fix 2): no lingering "Exit focus" button from the
+  // stale focus built around the old focal person.
+  expect(screen.queryByText('Exit focus')).not.toBeInTheDocument()
 })
 
-test('renders a parent-child connecting seam below each ancestor-row Couple', () => {
-  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+test('renders a parent-child connecting seam below each ancestor-row Couple, as a DOM sibling of .couple not nested inside it', () => {
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   const annaColumn = screen.getByText('Anna').closest('.gen-column')!
-  expect(annaColumn.querySelector('.seam-parent-child')).not.toBeNull()
+  const seam = annaColumn.querySelector('.seam-parent-child')
+  const couple = annaColumn.querySelector('.couple')!
+  expect(seam).not.toBeNull()
+  // Placement, not just presence: the seam must be a direct child of
+  // .gen-column and a sibling of .couple — not nested inside .couple, which
+  // is a horizontal flex row that would lay a vertical seam out sideways.
+  expect(seam!.parentElement).toBe(annaColumn)
+  expect(couple.parentElement).toBe(annaColumn)
 })
 
-test("renders a parent-child connecting seam below a descendant's Couple when they have children", () => {
+test("the ancestor-row seam doesn't dangle below the focal person's own row when they have no recorded children", () => {
+  // Sanjay (this test's focal person) has no recorded children, so the
+  // depth-0 row's seam should not render at all — otherwise it'd be a
+  // dashed stub pointing at nothing below a childless focal person's card.
+  render(<TreeView people={people} relationships={relationships} focalId="sanjay" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  const sanjayColumn = screen.getByText('Sanjay').closest('.gen-column')!
+  expect(sanjayColumn.querySelector('.seam-parent-child')).toBeNull()
+})
+
+test("renders a parent-child connecting seam below a descendant's Couple, as a DOM sibling of .couple not nested inside it, regardless of whether they have their own children", () => {
+  // Renamed from a prior version of this test whose name and assertion
+  // contradicted each other (named "...when they have children" but actually
+  // asserted the seam was ABSENT). Per Fix 4, the seam represents the
+  // connection UP to this descendant's own parent — which always exists for
+  // anyone rendered via DescendantBranch — so it renders unconditionally,
+  // not gated on the descendant having children of their own.
   const withChild = [...people, person('rohan', 'Rohan')]
   const relsWithChild: Relationship[] = [...relationships, { id: 'r8', type: 'parent-child', from_id: 'meera', to_id: 'rohan' }]
   render(<TreeView people={withChild} relationships={relsWithChild} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
-  fireEvent.doubleClick(screen.getByText('Rohan').closest('.patch')!)
-  fireEvent.click(screen.getByText('Exit focus'))
+
+  // Rohan (Meera's child) has no children of his own, yet still gets the seam.
   const rohanColumn = screen.getByText('Rohan').closest('.gen-column')!
-  expect(rohanColumn.querySelector('.seam-parent-child')).toBeNull()
+  const rohanSeam = rohanColumn.querySelector('.seam-parent-child')
+  expect(rohanSeam).not.toBeNull()
+  expect(rohanSeam!.parentElement).toBe(rohanColumn)
+  expect(rohanColumn.querySelector('.couple')!.parentElement).toBe(rohanColumn)
 })

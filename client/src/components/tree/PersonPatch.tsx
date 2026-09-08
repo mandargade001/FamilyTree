@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Person } from '../../types'
 import { Icon } from '../shared/Icon'
 import { getPrimaryPhoto } from '../../api/photos'
@@ -38,11 +38,49 @@ export function PersonPatch({ person, inFocus, dimmed, fresh, onOpen, onDoubleOp
     }
   }, [person.id])
 
+  // A real browser always fires `click` before `dblclick` — a double-click
+  // is `click, click, dblclick`. Sibling patches single-click to re-center
+  // the whole tree (a destructive-feeling action for an accidental double
+  // click), so the single-click side effect is held behind a short timer and
+  // cancelled if a double-click arrives first, matching the standard
+  // double-click disambiguation pattern.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (clickTimer.current) clearTimeout(clickTimer.current)
+    }
+  }, [])
+
+  function handleClick() {
+    // A real double-click fires TWO `click` events before `dblclick` (not
+    // one) — mousedown/mouseup/click, mousedown/mouseup/click, dblclick. If
+    // each click started its own independent timer without clearing the
+    // previous one, the first timer would survive the dblclick's cancel
+    // (which only clears the *latest* timer ref) and still fire `onOpen`
+    // late. Clearing any pending timer before arming a new one makes this a
+    // proper debounce: at most one timer is ever live, so a genuine
+    // dblclick's cancel always reaches the only outstanding timer.
+    if (clickTimer.current) clearTimeout(clickTimer.current)
+    clickTimer.current = setTimeout(() => {
+      onOpen(person.id)
+      clickTimer.current = null
+    }, 250)
+  }
+
+  function handleDoubleClick() {
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current)
+      clickTimer.current = null
+    }
+    onDoubleOpen(person.id)
+  }
+
   return (
     <div
       className={classes}
-      onClick={() => onOpen(person.id)}
-      onDoubleClick={() => onDoubleOpen(person.id)}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
     >
       <div className="thumb">
         {photoUrl ? <img src={photoUrl} alt="" /> : <Icon name="photo" size={18} />}
