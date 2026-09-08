@@ -84,7 +84,12 @@ export default function App() {
       setRelationships(relRows)
       if (peopleRows.length > 0) setFocalId((prev) => prev ?? peopleRows[0].id)
       setLoadState('loaded')
-      void reconcileLastNames(peopleRows, relRows).catch((err) => console.error('Failed to backfill last names', err))
+      // Only attempt the backfill write if a passphrase is already stored —
+      // a read-only visitor who hasn't unlocked the gate would otherwise
+      // trigger a doomed write (and a console error) on every single load.
+      if (getPassphrase()) {
+        void reconcileLastNames(peopleRows, relRows)
+      }
     } catch (err) {
       // Deliberately do NOT fall through to the empty-state UI here — that would
       // invite re-entering data that may already exist. Show a distinct
@@ -114,25 +119,42 @@ export default function App() {
   // any newly-resolved names and reflect them in state. Safe to call after
   // every relevant write since resolveLastNames only ever fills a blank
   // field — a call that resolves nothing is a no-op past its first line.
+  //
+  // This runs after the caller's own write has already succeeded, so a
+  // failure in here must never surface as a failure of that write: every
+  // error (per-person, or from refresh) is caught and logged internally, and
+  // the function always returns normally. A person whose update fails this
+  // pass simply stays blank and will resolve again on the next reconcile.
   async function reconcileLastNames(currentPeople: Person[], currentRelationships: Relationship[]) {
     const updates = resolveLastNames(currentPeople, currentRelationships)
     if (updates.length === 0) return
     const byId = new Map(currentPeople.map((p) => [p.id, p]))
-    for (const update of updates) {
-      const person = byId.get(update.id)
-      if (!person) continue
-      await updatePerson(person.id, {
-        first_name: person.first_name,
-        last_name: update.last_name,
-        gender: person.gender,
-        birth_date: person.birth_date,
-        death_date: person.death_date,
-        birth_place: person.birth_place,
-        occupation: person.occupation,
-        bio: person.bio,
-      })
+    try {
+      for (const update of updates) {
+        const person = byId.get(update.id)
+        if (!person) continue
+        try {
+          await updatePerson(person.id, {
+            first_name: person.first_name,
+            last_name: update.last_name,
+            gender: person.gender,
+            birth_date: person.birth_date,
+            death_date: person.death_date,
+            birth_place: person.birth_place,
+            occupation: person.occupation,
+            bio: person.bio,
+          })
+        } catch (err) {
+          console.error('Failed to reconcile last name for person', person.id, err)
+        }
+      }
+    } finally {
+      try {
+        await refresh()
+      } catch (err) {
+        console.error('Failed to refresh after reconciling last names', err)
+      }
     }
-    await refresh()
   }
 
   // Centralizes save-failure handling: a write rejected specifically for an

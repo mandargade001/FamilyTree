@@ -113,4 +113,34 @@ describe('resolveLastNames', () => {
     )
     expect(updates).toHaveLength(2)
   })
+
+  test('a married daughter resolves via her spouse regardless of array order (order-independence)', () => {
+    const brideFather = person({ id: 'brideFather', last_name: 'Deshmukh', gender: 'Male' })
+    const groomFather = person({ id: 'groomFather', last_name: 'Khandgaonkar', gender: 'Male' })
+    const bride = person({ id: 'bride', last_name: null, gender: 'Female' })
+    const groom = person({ id: 'groom', last_name: null, gender: 'Male' })
+    const relationships = [
+      parentChild('brideFather', 'bride'),
+      parentChild('groomFather', 'groom'),
+      spouse('bride', 'groom'),
+    ]
+
+    const brideFirstUpdates = resolveLastNames(
+      [bride, brideFather, groom, groomFather],
+      relationships,
+    )
+    const groomFirstUpdates = resolveLastNames(
+      [groom, groomFather, bride, brideFather],
+      relationships,
+    )
+
+    const expected = expect.arrayContaining([
+      { id: 'bride', last_name: 'Khandgaonkar' },
+      { id: 'groom', last_name: 'Khandgaonkar' },
+    ])
+    expect(brideFirstUpdates).toEqual(expected)
+    expect(brideFirstUpdates).toHaveLength(2)
+    expect(groomFirstUpdates).toEqual(expected)
+    expect(groomFirstUpdates).toHaveLength(2)
+  })
 })

@@ -518,6 +518,10 @@ test('deleting the focal person returns to the bare tree view', async () => {
 })
 
 test('loading the app backfills a blank last name the relationship graph already resolves', async () => {
+  // The load-path reconcile only fires a write when a passphrase is already
+  // stored — a read-only visitor without one must never trigger a doomed
+  // write attempt (see the sibling test below for that case).
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
   ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
     { id: 'father', first_name: 'Ravi', last_name: 'Gade', gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
     { id: 'son', first_name: 'Omkar', last_name: null, gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
@@ -529,6 +533,56 @@ test('loading the app backfills a blank last name the relationship graph already
   await waitFor(() => expect(screen.getByText('Ravi Gade')).toBeInTheDocument())
 
   await waitFor(() => expect(updatePerson).toHaveBeenCalledWith('son', expect.objectContaining({ last_name: 'Gade' })))
+})
+
+test('loading the app as a read-only visitor (no stored passphrase) never attempts the backfill write', async () => {
+  // Mocks aren't reset between tests in this file, so clear call history
+  // explicitly rather than relying on "never called" meaning "since the
+  // start of the test run".
+  ;(updatePerson as ReturnType<typeof vi.fn>).mockClear()
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'father', first_name: 'Ravi', last_name: 'Gade', gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'son', first_name: 'Omkar', last_name: null, gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'parent-child', from_id: 'father', to_id: 'son' },
+  ])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Ravi Gade')).toBeInTheDocument())
+
+  // Give any stray async work a tick to run, then confirm no write happened.
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(updatePerson).not.toHaveBeenCalled()
+})
+
+test('linking an existing spouse resolves the blank-named partner\'s last name from the other', async () => {
+  localStorage.setItem('vansh:passphrase', 'test-passphrase')
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'priya', first_name: 'Priya', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'ravi', first_name: 'Ravi', last_name: 'Gade', gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  render(<App />)
+  await waitFor(() => expect(screen.getByText('Priya')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Priya'))
+  await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument())
+
+  ;(fetchPeople as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'priya', first_name: 'Priya', last_name: null, gender: 'Female', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+    { id: 'ravi', first_name: 'Ravi', last_name: 'Gade', gender: 'Male', birth_date: null, death_date: null, birth_place: null, occupation: null, bio: null, created_at: '', updated_at: '' },
+  ])
+  ;(fetchRelationships as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    { id: 'r1', type: 'spouse', from_id: 'priya', to_id: 'ravi' },
+  ])
+
+  fireEvent.click(screen.getByText('Add relationship'))
+  await waitFor(() => expect(screen.getByText('Add relationship to Priya')).toBeInTheDocument())
+  fireEvent.click(screen.getByText('Spouse'))
+  fireEvent.change(screen.getByPlaceholderText('Search existing people…'), { target: { value: 'Ravi' } })
+  fireEvent.click(screen.getByText('Ravi Gade'))
+
+  await waitFor(() => expect(addRelationship).toHaveBeenCalledWith('spouse', 'priya', 'ravi'))
+  await waitFor(() => expect(updatePerson).toHaveBeenCalledWith('priya', expect.objectContaining({ last_name: 'Gade' })))
 })
 
 test('editing a person to set their gender resolves their blank last name from their father', async () => {
