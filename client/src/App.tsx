@@ -164,7 +164,17 @@ export default function App() {
       await addRelationship('parent-child', anchorId, otherId)
       const spouseId = getSpouseIds(anchorId, relationships)[0]
       if (spouseId) {
-        await addRelationship('parent-child', spouseId, otherId)
+        try {
+          await addRelationship('parent-child', spouseId, otherId)
+        } catch (err) {
+          // The anchor's own link above already succeeded. If the picked
+          // person is already recorded as the spouse's child from a
+          // different action, this second call is a harmless duplicate —
+          // treat it as "already done" rather than surfacing a "They're
+          // already linked that way" error for an operation that mostly
+          // worked. Same pattern as the sibling branch below.
+          if (!(err instanceof Error && err.message.includes('relationships_unique_edge'))) throw err
+        }
       }
     } else if (kind === 'sibling') {
       // The picked/created person becomes a parent-child of each of the
