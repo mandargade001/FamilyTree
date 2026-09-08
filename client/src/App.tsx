@@ -84,7 +84,7 @@ export default function App() {
       setRelationships(relRows)
       if (peopleRows.length > 0) setFocalId((prev) => prev ?? peopleRows[0].id)
       setLoadState('loaded')
-      void reconcileLastNames(peopleRows, relRows)
+      void reconcileLastNames(peopleRows, relRows).catch((err) => console.error('Failed to backfill last names', err))
     } catch (err) {
       // Deliberately do NOT fall through to the empty-state UI here — that would
       // invite re-entering data that may already exist. Show a distinct
