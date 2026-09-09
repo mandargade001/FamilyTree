@@ -184,6 +184,15 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   const hasMoreAncestors = rows.some((row) => row.depth > maxAncestorDepth)
   const focalChildren = getDescendantIds(focalId, relationships).filter((id) => byId.has(id))
 
+  // The root (depth-0) ancestor-row unit is the focal couple's own row —
+  // used both to decide whether an open flap forces the flex fallback (any
+  // flap NOT on the focal couple's own person/spouse ids counts as "deep")
+  // and reused by renderAncestorGrid below to append the focal couple's own
+  // revealed sibling columns.
+  const rootUnit = visibleRows.find((row) => row.depth === 0)?.units[0] ?? null
+  const rootDepth0Ids = rootUnit ? [rootUnit.personId, rootUnit.spouseId].filter((id): id is string => id !== null) : []
+  const hasDeepFlapOpen = [...openFlaps].some((id) => !rootDepth0Ids.includes(id))
+
   const focusedSet = focusedId ? focusSetFor(focusedId, relationships) : null
 
   function toggleFlap(personId: string) {
@@ -522,7 +531,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     // person has recorded children, same condition as the old code used.
     const rootRow = visibleRows.find((r) => r.depth === 0)
     if (rootRow && focalChildren.length > 0) {
-      const rootSpan = spans.get(rootRow.units[0].personId)
+      const rootSpan = spans.get(rootRow.units[0].id)
       if (rootSpan) {
         items.push(
           <div
@@ -531,6 +540,55 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
             style={{ gridColumn: `${rootSpan.start + 1} / ${rootSpan.end + 1}`, gridRow: 2 * maxVisibleDepth + 2 }}
           />,
         )
+      }
+    }
+
+    // Depth-0 sibling-flap composition: the focal couple's own revealed
+    // siblings render as trailing grid columns, positioned after the
+    // depth-0 unit's own person/spouse columns. They get no connector row
+    // (no ancestor lineage of their own is drawn above them, matching the
+    // established rule for revealed siblings) and don't affect any span
+    // computed above, since they're appended strictly after the highest
+    // column index already in use.
+    if (rootRow) {
+      const rootUnitForSiblings = rootRow.units[0]
+      const rootPerson = byId.get(rootUnitForSiblings.personId)
+      const rootSpouse = rootUnitForSiblings.spouseId ? byId.get(rootUnitForSiblings.spouseId) : null
+      const rootAnyMissingParent =
+        rootPerson != null &&
+        (getParentIds(rootUnitForSiblings.personId, relationships).length === 0 ||
+          (rootSpouse != null && getParentIds(rootSpouse.id, relationships).length === 0))
+
+      let nextColumn = 0
+      for (const span of spans.values()) {
+        if (span.end > nextColumn) nextColumn = span.end
+      }
+
+      const appendSiblingColumns = (siblingIds: string[]) => {
+        for (const sibId of siblingIds) {
+          if (!openFlaps.has(rootUnitForSiblings.personId) && !(rootUnitForSiblings.spouseId && openFlaps.has(rootUnitForSiblings.spouseId))) continue
+          const sibling = byId.get(sibId)
+          if (!sibling) continue
+          const sibSpouseId = getSpouseIds(sibId, relationships)[0]
+          const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) ?? null : null
+          items.push(
+            <div
+              className="ancestor-grid-item"
+              key={`sibling-${sibId}`}
+              style={{ gridColumn: `${nextColumn + 1} / ${nextColumn + 2}`, gridRow: 2 * maxVisibleDepth + 1 }}
+            >
+              {renderSiblingColumn(sibId, sibling, sibSpouse, rootAnyMissingParent)}
+            </div>,
+          )
+          nextColumn += 1
+        }
+      }
+
+      if (openFlaps.has(rootUnitForSiblings.personId)) {
+        appendSiblingColumns(siblingsOf(rootUnitForSiblings.personId))
+      }
+      if (rootUnitForSiblings.spouseId && openFlaps.has(rootUnitForSiblings.spouseId)) {
+        appendSiblingColumns(siblingsOf(rootUnitForSiblings.spouseId))
       }
     }
 
@@ -566,7 +624,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           </div>
         </div>
       )}
-      {openFlaps.size === 0 ? renderAncestorGrid() : renderFlexAncestorRows()}
+      {hasDeepFlapOpen ? renderFlexAncestorRows() : renderAncestorGrid()}
       {hasMoreAncestors && (
         <button className="show-more-ancestors" onClick={() => setMaxAncestorDepth((d) => d + 1)}>
           Show more ancestors
