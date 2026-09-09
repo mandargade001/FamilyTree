@@ -36,7 +36,11 @@ test('siblings start collapsed behind a flap showing the correct count', () => {
   expect(screen.queryByText('Sanjay')).not.toBeInTheDocument()
 })
 
-test('clicking the sibling flap reveals the siblings as row-adjacent columns, not nested under the owner', () => {
+test('clicking the sibling flap reveals the siblings as separate columns, not nested under the owner', () => {
+  // Meera's own sibling flap is a depth-0 flap, so (per Task 4) this stays
+  // on the precise grid rendering path rather than falling back to flex —
+  // siblings render as their own trailing grid items rather than as
+  // flex-adjacent .gen-column siblings under a shared .gen parent.
   const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
   fireEvent.click(screen.getByText('2'))
   expect(screen.getByText('Sanjay')).toBeInTheDocument()
@@ -45,11 +49,11 @@ test('clicking the sibling flap reveals the siblings as row-adjacent columns, no
   const meeraColumn = screen.getByText('Meera').closest('.gen-column')!
   const sanjayColumn = screen.getByText('Sanjay').closest('.gen-column')!
   expect(sanjayColumn).not.toBe(meeraColumn)
-  expect(sanjayColumn.parentElement).toBe(meeraColumn.parentElement)
-  // This fixture's people have no last names, so there's nothing to
-  // distinguish — no cluster box is drawn (see the cluster-boundary-fix
-  // spec). The row-adjacency assertions above are what this test verifies.
-  expect(meeraColumn.closest('.family-cluster')).toBeNull()
+  expect(meeraColumn.contains(sanjayColumn)).toBe(false)
+  const grid = container.querySelector('.ancestor-grid')!
+  expect(grid).not.toBeNull()
+  expect(grid.contains(meeraColumn)).toBe(true)
+  expect(grid.contains(sanjayColumn)).toBe(true)
   expect(container.querySelector('.sibling-list')).not.toBeInTheDocument()
 })
 
@@ -720,9 +724,19 @@ test('renders ancestor rows via the precise grid layout when no sibling flap is 
   expect(container.querySelector('.ancestor-grid')).toBeInTheDocument()
 })
 
-test('opening a sibling flap falls back to the pre-existing flex rendering', () => {
-  const { container } = render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
-  fireEvent.click(screen.getByText('2'))
+test('opening a deeper-generation sibling flap falls back to the pre-existing flex rendering', () => {
+  // Meera's own (depth-0) sibling flap now stays on the grid path (Task 4),
+  // so this regression guard must open a flap at a deeper generation
+  // instead — here, Ravi's own sibling flap (Ravi is part of the depth-1
+  // ancestor row, Meera's parents) — to still exercise the flex fallback.
+  const siblingSpousePeople = [...people, person('ravi_parent', 'RaviParent'), person('ravi_sibling', 'RaviSibling')]
+  const siblingSpouseRelationships: Relationship[] = [
+    ...relationships,
+    { id: 'r8', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi' },
+    { id: 'r9', type: 'parent-child', from_id: 'ravi_parent', to_id: 'ravi_sibling' },
+  ]
+  const { container } = render(<TreeView people={siblingSpousePeople} relationships={siblingSpouseRelationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('1'))
   expect(container.querySelector('.ancestor-grid')).not.toBeInTheDocument()
   // `.gen` alone is too weak an assertion here — the unrelated
   // `.descendants` section also uses `.gen`, so it would pass even if the
@@ -815,4 +829,163 @@ test('a parent does not vanish from the grid when two co-parents have no recorde
   expect(container.querySelector('.ancestor-grid')).toBeInTheDocument()
   expect(screen.getByText('Dad')).toBeInTheDocument()
   expect(screen.getByText('Mom')).toBeInTheDocument()
+})
+
+test('grid mode renders both ancestor units when two share a personId (pedigree collapse)', () => {
+  // Kunal's two parents (ila, om, no recorded spouse edge between them)
+  // share one grandparent, grandma, reachable via both of them at depth 2.
+  // Before the personId -> id rekey (fc33e63), computeAncestorLayout's
+  // spans map and TreeView's React keys were keyed by unit.personId, so the
+  // two grandma units collided on both the layout span and the React key —
+  // React would emit a "two children with the same key" console.error even
+  // though both DOM nodes still render (React doesn't drop elements for a
+  // colliding key on a fresh mount, only warns). The getAllByText assertion
+  // below is therefore not a real regression guard by itself; the
+  // console.error spy is the assertion that actually discriminates the bug.
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const cousinPeople = [person('kunal', 'Kunal'), person('ila', 'Ila'), person('om', 'Om'), person('grandma', 'Grandma')]
+  const cousinRelationships: Relationship[] = [
+    { id: 'r1', type: 'parent-child', from_id: 'ila', to_id: 'kunal' },
+    { id: 'r2', type: 'parent-child', from_id: 'om', to_id: 'kunal' },
+    { id: 'r3', type: 'parent-child', from_id: 'grandma', to_id: 'ila' },
+    { id: 'r4', type: 'parent-child', from_id: 'grandma', to_id: 'om' },
+  ]
+  render(
+    <TreeView
+      people={cousinPeople}
+      relationships={cousinRelationships}
+      focalId="kunal"
+      onAddParent={() => {}}
+      onOpenProfile={() => {}}
+      onCenterOn={() => {}}
+    />,
+  )
+  fireEvent.click(screen.getByText('Show more ancestors'))
+  expect(screen.getAllByText('Grandma').length).toBe(2)
+  const duplicateKeyWarning = errorSpy.mock.calls.find((call) =>
+    call.some((arg) => typeof arg === 'string' && /same key|duplicate key/i.test(arg)),
+  )
+  expect(duplicateKeyWarning).toBeUndefined()
+  errorSpy.mockRestore()
+})
+
+test('opening the focal couples own sibling flap stays on grid rendering, with sibling columns', () => {
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  fireEvent.click(screen.getByText('2')) // Meera's sibling-flap bubble, count 2 (Sanjay, Deepak)
+  // Still grid mode: the ancestor-grid container is present, not the flex .gen rows.
+  expect(document.querySelector('.ancestor-grid')).not.toBeNull()
+  expect(screen.getByText('Sanjay')).toBeInTheDocument()
+  expect(screen.getByText('Deepak')).toBeInTheDocument()
+})
+
+test('opening the focal couples own sibling flap in grid mode shows the flap itself as open', () => {
+  // Task 4 fix: renderAncestorGrid used to hardcode flapsInteractive: false
+  // for every unit, including the depth-0/root one — so once the grid path
+  // started rendering with a depth-0 flap open (this same task), the flap
+  // bubble the user just clicked never picked up the 'open' class or the
+  // "Hide siblings" aria-label, even though its siblings were correctly
+  // rendered as trailing columns. Before the fix this assertion fails
+  // (RED); after passing flapsInteractive: true for the root unit only, it
+  // passes (GREEN).
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  const flapButton = screen.getByText('2') // Meera's sibling-flap bubble, count 2 (Sanjay, Deepak)
+  fireEvent.click(flapButton)
+  expect(document.querySelector('.ancestor-grid')).not.toBeNull()
+  expect(screen.getByText('Sanjay')).toBeInTheDocument()
+  expect(flapButton).toHaveClass('open')
+  expect(flapButton).toHaveAttribute('aria-label', 'Hide siblings')
+})
+
+test('grid-mode revealed siblings render inside a labeled family-cluster box when they have a determinable surname', () => {
+  // Final-review Finding 1: the grid path's depth-0 sibling-flap composition
+  // (Task 4) rendered every revealed sibling as a bare .ancestor-grid-item,
+  // with no clusterLabel/boxing, unlike the flex path's
+  // groupSegmentsIntoClusters. Meera8's family shares the surname 'Sharma',
+  // so her revealed sibling Deepak8 (no spouse, so clusterLabel(sibling,
+  // null) resolves to his own last_name) must render inside a boxed,
+  // captioned .family-cluster, matching the established pattern already
+  // used for multi-lineage ancestor rows.
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    named('meera8', 'Meera8', 'Sharma'), named('anna8', 'Anna8', 'Sharma'), named('ravi8', 'Ravi8', 'Sharma'),
+    named('deepak8', 'Deepak8', 'Sharma'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'anna8', to_id: 'ravi8' },
+    { id: 'r2', type: 'parent-child', from_id: 'anna8', to_id: 'meera8' },
+    { id: 'r3', type: 'parent-child', from_id: 'ravi8', to_id: 'meera8' },
+    { id: 'r4', type: 'parent-child', from_id: 'anna8', to_id: 'deepak8' },
+    { id: 'r5', type: 'parent-child', from_id: 'ravi8', to_id: 'deepak8' },
+  ]
+  render(
+    <TreeView
+      people={clusteredPeople}
+      relationships={clusteredRelationships}
+      focalId="meera8"
+      onAddParent={() => {}}
+      onOpenProfile={() => {}}
+      onCenterOn={() => {}}
+    />,
+  )
+  fireEvent.click(screen.getByText('1')) // Meera8's sibling-flap bubble, count 1 (Deepak8)
+  expect(document.querySelector('.ancestor-grid')).not.toBeNull()
+
+  const deepakColumn = screen.getByText('Deepak8', { exact: false }).closest('.gen-column')!
+  const deepakCluster = deepakColumn.closest('.family-cluster')
+  expect(deepakCluster).not.toBeNull()
+  expect(deepakCluster!.querySelector('.family-cluster-label')).toHaveTextContent('Sharma')
+})
+
+test("a depth-0 couple with a determinable surname that differs from a revealed sibling's gets boxed too, for visual consistency", () => {
+  // Meera9's own surname ('Sharma') differs from her revealed half-sibling
+  // Kiran9's ('Verma', via Ravi9's second marriage — not modeled here, just
+  // two different surnames on siblings), so per renderFlexAncestorRows'
+  // shouldGroup rule (2+ distinct surnames in the row), the couple's own
+  // column should also render boxed — not just the sibling's.
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    named('meera9', 'Meera9', 'Sharma'), named('anna9', 'Anna9', 'Sharma'), named('ravi9', 'Ravi9', 'Sharma'),
+    named('kiran9', 'Kiran9', 'Verma'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'anna9', to_id: 'ravi9' },
+    { id: 'r2', type: 'parent-child', from_id: 'anna9', to_id: 'meera9' },
+    { id: 'r3', type: 'parent-child', from_id: 'ravi9', to_id: 'meera9' },
+    { id: 'r4', type: 'parent-child', from_id: 'anna9', to_id: 'kiran9' },
+    { id: 'r5', type: 'parent-child', from_id: 'ravi9', to_id: 'kiran9' },
+  ]
+  render(
+    <TreeView
+      people={clusteredPeople}
+      relationships={clusteredRelationships}
+      focalId="meera9"
+      onAddParent={() => {}}
+      onOpenProfile={() => {}}
+      onCenterOn={() => {}}
+    />,
+  )
+  fireEvent.click(screen.getByText('1')) // Meera9's sibling-flap bubble, count 1 (Kiran9)
+
+  const meeraColumn = screen.getByText('Meera9', { exact: false }).closest('.gen-column')!
+  expect(meeraColumn.closest('.family-cluster')).not.toBeNull()
+  const kiranColumn = screen.getByText('Kiran9', { exact: false }).closest('.gen-column')!
+  expect(kiranColumn.closest('.family-cluster')).not.toBeNull()
+  expect(meeraColumn.closest('.family-cluster')).not.toBe(kiranColumn.closest('.family-cluster'))
+})
+
+test('opening a deeper-generation sibling flap still falls back to flex rendering', () => {
+  const deepPeople = [
+    person('focal', 'Focal'), person('parent1', 'Parent'), person('parentSib', 'ParentSibling'), person('grandparent', 'Grand'),
+  ]
+  const deepRelationships: Relationship[] = [
+    { id: 'r1', type: 'parent-child', from_id: 'parent1', to_id: 'focal' },
+    { id: 'r2', type: 'parent-child', from_id: 'grandparent', to_id: 'parent1' },
+    { id: 'r3', type: 'parent-child', from_id: 'grandparent', to_id: 'parentSib' },
+  ]
+  render(<TreeView people={deepPeople} relationships={deepRelationships} focalId="focal" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  // maxAncestorDepth defaults to 1, so parent1's row (depth 1) is already
+  // visible with no expansion click needed — grandparent has no recorded
+  // parents of their own, so "Show more ancestors" wouldn't even render.
+  fireEvent.click(screen.getByText('1')) // parent1's sibling-flap bubble, count 1 (parentSib)
+  expect(document.querySelector('.ancestor-grid')).toBeNull()
 })

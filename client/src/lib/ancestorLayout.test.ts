@@ -4,21 +4,21 @@ import { computeAncestorLayout } from './ancestorLayout'
 
 describe('computeAncestorLayout', () => {
   test('a solo focal person with no recorded spouse gets a single-column span', () => {
-    const rows: AncestorRow[] = [{ depth: 0, units: [{ personId: 'meera', spouseId: null, childId: null }] }]
+    const rows: AncestorRow[] = [{ depth: 0, units: [{ id: 'meera', personId: 'meera', spouseId: null, childId: null }] }]
     const spans = computeAncestorLayout(rows)
     expect(spans.get('meera')).toEqual({ start: 0, end: 1 })
   })
 
   test('a focal couple with no recorded ancestors gets a two-column span', () => {
-    const rows: AncestorRow[] = [{ depth: 0, units: [{ personId: 'mangal', spouseId: 'kishan', childId: null }] }]
+    const rows: AncestorRow[] = [{ depth: 0, units: [{ id: 'mangal', personId: 'mangal', spouseId: 'kishan', childId: null }] }]
     const spans = computeAncestorLayout(rows)
     expect(spans.get('mangal')).toEqual({ start: 0, end: 2 })
   })
 
   test("one side's recorded parents render in that side's own portion, leaving room on the other side", () => {
     const rows: AncestorRow[] = [
-      { depth: 0, units: [{ personId: 'mangal', spouseId: 'kishan', childId: null }] },
-      { depth: 1, units: [{ personId: 'hanmantrao', spouseId: 'saraswati', childId: 'mangal' }] },
+      { depth: 0, units: [{ id: 'mangal', personId: 'mangal', spouseId: 'kishan', childId: null }] },
+      { depth: 1, units: [{ id: 'hanmantrao', personId: 'hanmantrao', spouseId: 'saraswati', childId: 'mangal' }] },
     ]
     const spans = computeAncestorLayout(rows)
     // Mangal's own reserved width grows to 3 (2 for her parents' couple + 1
@@ -35,12 +35,12 @@ describe('computeAncestorLayout', () => {
 
   test('both sides having recorded parents places them side by side, never overlapping', () => {
     const rows: AncestorRow[] = [
-      { depth: 0, units: [{ personId: 'mangal', spouseId: 'kishan', childId: null }] },
+      { depth: 0, units: [{ id: 'mangal', personId: 'mangal', spouseId: 'kishan', childId: null }] },
       {
         depth: 1,
         units: [
-          { personId: 'hanmantrao', spouseId: 'saraswati', childId: 'mangal' },
-          { personId: 'kishan_dad', spouseId: 'kishan_mom', childId: 'kishan' },
+          { id: 'hanmantrao', personId: 'hanmantrao', spouseId: 'saraswati', childId: 'mangal' },
+          { id: 'kishan_dad', personId: 'kishan_dad', spouseId: 'kishan_mom', childId: 'kishan' },
         ],
       },
     ]
@@ -52,9 +52,9 @@ describe('computeAncestorLayout', () => {
 
   test("a deeper ancestor on one side widens every generation below it on that same side", () => {
     const rows: AncestorRow[] = [
-      { depth: 0, units: [{ personId: 'mangal', spouseId: 'kishan', childId: null }] },
-      { depth: 1, units: [{ personId: 'hanmantrao', spouseId: 'saraswati', childId: 'mangal' }] },
-      { depth: 2, units: [{ personId: 'great_grandpa', spouseId: 'great_grandma', childId: 'hanmantrao' }] },
+      { depth: 0, units: [{ id: 'mangal', personId: 'mangal', spouseId: 'kishan', childId: null }] },
+      { depth: 1, units: [{ id: 'hanmantrao', personId: 'hanmantrao', spouseId: 'saraswati', childId: 'mangal' }] },
+      { depth: 2, units: [{ id: 'great_grandpa', personId: 'great_grandpa', spouseId: 'great_grandma', childId: 'hanmantrao' }] },
     ]
     const spans = computeAncestorLayout(rows)
     // hanmantrao's own required width becomes 2 (his parents' couple) + 1
@@ -78,12 +78,12 @@ describe('computeAncestorLayout', () => {
   // from the rendered tree.
   test('two co-parents with no recorded spouse relationship both get non-overlapping spans', () => {
     const rows: AncestorRow[] = [
-      { depth: 0, units: [{ personId: 'mangal', spouseId: 'kishan', childId: null }] },
+      { depth: 0, units: [{ id: 'mangal', personId: 'mangal', spouseId: 'kishan', childId: null }] },
       {
         depth: 1,
         units: [
-          { personId: 'father', spouseId: null, childId: 'mangal' },
-          { personId: 'mother', spouseId: null, childId: 'mangal' },
+          { id: 'father', personId: 'father', spouseId: null, childId: 'mangal' },
+          { id: 'mother', personId: 'mother', spouseId: null, childId: 'mangal' },
         ],
       },
     ]
@@ -107,5 +107,35 @@ describe('computeAncestorLayout', () => {
     // mangal's own side (kishan's, still unrecorded) still reserves 1, so
     // mangal's total span is 2 (father+mother) + 1 (kishan) = 3.
     expect(spans.get('mangal')).toEqual({ start: 0, end: 3 })
+  })
+
+  test('computeAncestorLayout gives two units sharing a personId distinct, non-overlapping spans', () => {
+    // Kunal's two depth-1 parents (ila, om) both trace back to the same
+    // depth-2 ancestor, grandma — a pedigree collapse producing two
+    // AncestorUnits with personId 'grandma' but different ids.
+    const rows: AncestorRow[] = [
+      { depth: 0, units: [{ id: '0:root:kunal', personId: 'kunal', spouseId: null, childId: null }] },
+      {
+        depth: 1,
+        units: [
+          { id: '1:kunal:ila', personId: 'ila', spouseId: null, childId: 'kunal' },
+          { id: '1:kunal:om', personId: 'om', spouseId: null, childId: 'kunal' },
+        ],
+      },
+      {
+        depth: 2,
+        units: [
+          { id: '2:ila:grandma', personId: 'grandma', spouseId: null, childId: 'ila' },
+          { id: '2:om:grandma', personId: 'grandma', spouseId: null, childId: 'om' },
+        ],
+      },
+    ]
+    const spans = computeAncestorLayout(rows)
+    const span1 = spans.get('2:ila:grandma')
+    const span2 = spans.get('2:om:grandma')
+    expect(span1).toBeDefined()
+    expect(span2).toBeDefined()
+    // Non-overlapping: one entirely before the other.
+    expect(span1!.end <= span2!.start || span2!.end <= span1!.start).toBe(true)
   })
 })

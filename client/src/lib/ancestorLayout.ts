@@ -42,13 +42,13 @@ export function computeAncestorLayout(rows: AncestorRow[]): Map<string, ColumnSp
     if (row.depth > maxDepth) maxDepth = row.depth
   }
 
-  // Pass 1: bottom-up required width, keyed by unit.personId.
+  // Pass 1: bottom-up required width, keyed by unit.id.
   const requiredWidth = new Map<string, number>()
   const unitByChildId = new Map<number, Map<string, AncestorUnit[]>>()
 
   const sumWidth = (units: AncestorUnit[] | undefined): number => {
     if (!units || units.length === 0) return 1
-    return units.reduce((sum, u) => sum + requiredWidth.get(u.personId)!, 0)
+    return units.reduce((sum, u) => sum + requiredWidth.get(u.id)!, 0)
   }
 
   for (let depth = maxDepth; depth >= 0; depth--) {
@@ -67,7 +67,7 @@ export function computeAncestorLayout(rows: AncestorRow[]): Map<string, ColumnSp
     for (const unit of row.units) {
       const personWidth = sumWidth(nextChildMap?.get(unit.personId))
       const spouseWidth = unit.spouseId ? sumWidth(nextChildMap?.get(unit.spouseId)) : 0
-      requiredWidth.set(unit.personId, personWidth + spouseWidth)
+      requiredWidth.set(unit.id, personWidth + spouseWidth)
     }
   }
 
@@ -76,15 +76,15 @@ export function computeAncestorLayout(rows: AncestorRow[]): Map<string, ColumnSp
   const rootRow = rowsByDepth.get(0)
   if (!rootRow || rootRow.units.length === 0) return spans
   const rootUnit = rootRow.units[0]
-  spans.set(rootUnit.personId, { start: 0, end: requiredWidth.get(rootUnit.personId) ?? (rootUnit.spouseId ? 2 : 1) })
+  spans.set(rootUnit.id, { start: 0, end: requiredWidth.get(rootUnit.id) ?? (rootUnit.spouseId ? 2 : 1) })
 
   // Lay out a side's matching units side by side within [start, start + total).
   const layoutSide = (units: AncestorUnit[] | undefined, start: number): void => {
     if (!units) return
     let cursor = start
     for (const unit of units) {
-      const width = requiredWidth.get(unit.personId)!
-      spans.set(unit.personId, { start: cursor, end: cursor + width })
+      const width = requiredWidth.get(unit.id)!
+      spans.set(unit.id, { start: cursor, end: cursor + width })
       cursor += width
     }
   }
@@ -96,7 +96,7 @@ export function computeAncestorLayout(rows: AncestorRow[]): Map<string, ColumnSp
     if (!nextChildMap) continue
 
     for (const unit of row.units) {
-      const parentSpan = spans.get(unit.personId)
+      const parentSpan = spans.get(unit.id)
       if (!parentSpan) continue
 
       const personParents = nextChildMap.get(unit.personId)
