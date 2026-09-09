@@ -467,7 +467,7 @@ test("a revealed sibling from a different lineage than their married-in relative
 
   const gadeLabel = screen.getByText('Gade')
   const khandgaonkarLabel = screen.getByText('Khandgaonkar')
-  const santoshColumn = screen.getByText('Santosh', { exact: false }).closest('.gen-column')!
+  const santoshColumn = screen.getByText('Santosh', { exact: false }).closest('.gen-column') as HTMLElement
 
   expect(gadeLabel.closest('.family-cluster')).not.toBe(khandgaonkarLabel.closest('.family-cluster'))
   expect(khandgaonkarLabel.closest('.family-cluster')).toContainElement(santoshColumn)
