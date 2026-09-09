@@ -341,8 +341,10 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   // this column (`seam`; only the flex path's per-unit rendering draws it
   // here — the grid path draws its connectors separately, positioned by
   // grid row/column) and whether a SiblingFlap's `open` state reflects the
-  // real openFlaps set (`flapsInteractive`; the grid path only ever renders
-  // when openFlaps is empty, so it hardcodes flaps closed).
+  // real openFlaps set (`flapsInteractive`; the flex path always passes
+  // true, while the grid path passes true only for the depth-0/root unit —
+  // the only unit that can have an open flap while still being in grid
+  // mode — and false for every other ancestor unit).
   function renderCoupleColumn(
     unit: AncestorUnit,
     person: Person,
@@ -475,9 +477,12 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
   // Renders every currently-visible ancestor row as one shared CSS Grid, so
   // a unit's horizontal position is guaranteed (by the grid itself, not by
   // coincidental flex-centering) to sit above the specific person it's the
-  // parent-pair of. Only called when no sibling flap is open anywhere (see
-  // the branch in the main render body) — sibling columns aren't part of
-  // this grid at all; see Global Constraints.
+  // parent-pair of. Only called when no DEEP sibling flap is open — i.e. no
+  // flap above depth 0 (see hasDeepFlapOpen / the branch in the main render
+  // body). A flap opened on the depth-0/root unit itself stays on this grid
+  // path: its revealed siblings are appended below as trailing grid
+  // columns, positioned after the root unit's own person/spouse columns —
+  // see the "Depth-0 sibling-flap composition" block below.
   function renderAncestorGrid(): ReactNode {
     const spans = computeAncestorLayout(visibleRows)
     const maxVisibleDepth = visibleRows.length > 0 ? Math.max(...visibleRows.map((r) => r.depth)) : 0
@@ -500,7 +505,14 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
         const label = clusterLabel(person, spouse)
         const boxed = row.units.length > 1
 
-        const coupleColumn = renderCoupleColumn(unit, person, spouse, { seam: false, flapsInteractive: false })
+        // Only the depth-0/root unit can ever have an open flap while still
+        // being in grid mode (any flap opened on a non-root unit is exactly
+        // what forces the flex fallback above) — so it's the only one whose
+        // SiblingFlap should reflect the real openFlaps set here.
+        const coupleColumn = renderCoupleColumn(unit, person, spouse, {
+          seam: false,
+          flapsInteractive: unit.id === rootUnit?.id,
+        })
 
         items.push(
           <div

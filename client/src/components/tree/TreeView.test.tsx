@@ -878,6 +878,24 @@ test('opening the focal couples own sibling flap stays on grid rendering, with s
   expect(screen.getByText('Deepak')).toBeInTheDocument()
 })
 
+test('opening the focal couples own sibling flap in grid mode shows the flap itself as open', () => {
+  // Task 4 fix: renderAncestorGrid used to hardcode flapsInteractive: false
+  // for every unit, including the depth-0/root one — so once the grid path
+  // started rendering with a depth-0 flap open (this same task), the flap
+  // bubble the user just clicked never picked up the 'open' class or the
+  // "Hide siblings" aria-label, even though its siblings were correctly
+  // rendered as trailing columns. Before the fix this assertion fails
+  // (RED); after passing flapsInteractive: true for the root unit only, it
+  // passes (GREEN).
+  render(<TreeView people={people} relationships={relationships} focalId="meera" onAddParent={() => {}} onOpenProfile={() => {}} onCenterOn={() => {}} />)
+  const flapButton = screen.getByText('2') // Meera's sibling-flap bubble, count 2 (Sanjay, Deepak)
+  fireEvent.click(flapButton)
+  expect(document.querySelector('.ancestor-grid')).not.toBeNull()
+  expect(screen.getByText('Sanjay')).toBeInTheDocument()
+  expect(flapButton).toHaveClass('open')
+  expect(flapButton).toHaveAttribute('aria-label', 'Hide siblings')
+})
+
 test('opening a deeper-generation sibling flap still falls back to flex rendering', () => {
   const deepPeople = [
     person('focal', 'Focal'), person('parent1', 'Parent'), person('parentSib', 'ParentSibling'), person('grandparent', 'Grand'),
