@@ -313,13 +313,28 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     return getSiblingIds(personId, relationships).filter((id) => byId.has(id))
   }
 
-  // Sibling columns render only a Couple, with nothing above it. The owner's
-  // own column can have a `.couple-slots` Add-Parent row above its Couple
-  // (see `anyMissingParent` below) — when it does, every sibling column in
-  // the same `.gen` row needs a same-height reserved spacer above its Couple
-  // too, or `align-items: flex-start` on `.gen` leaves the owner's Couple
-  // sitting visibly lower than the siblings', undoing Task 3's fix.
-  function renderSiblingColumn(sibId: string, sibling: Person, sibSpouse: Person | null, reserveTopSlot: boolean): ReactNode {
+  // Sibling columns render only a Couple, with nothing above it (plus,
+  // optionally, a spacer below it — see `bottomReserve`). The owner's own
+  // column can have a `.couple-slots` Add-Parent row above its Couple (see
+  // `anyMissingParent` below) — when it does (flex path only), every sibling
+  // column in the same `.gen` row needs a same-height reserved spacer above
+  // its Couple too, or `align-items: flex-start` on `.gen` leaves the
+  // owner's Couple sitting visibly lower than the siblings', undoing Task
+  // 3's fix. `bottomReserve` is the grid path's equivalent fix for the
+  // opposite edge: under `align-self: end` (bottom-alignment), a sibling
+  // column (which never shows its own sibling-flap row) ends right after
+  // its Couple, while the focal couple's own `.gen-column` ends with a
+  // sibling-flap row — bottom-aligned, the sibling's Couple would sit lower
+  // than the focal couple's. `reserveTopSlot` is a no-op under
+  // bottom-alignment (it only pads the top of a stretched column), so the
+  // grid path never passes it; only the flex path does.
+  function renderSiblingColumn(
+    sibId: string,
+    sibling: Person,
+    sibSpouse: Person | null,
+    reserveTopSlot: boolean,
+    bottomReserve = false,
+  ): ReactNode {
     return (
       <div className="gen-column" key={sibId}>
         {reserveTopSlot && <div className="sibling-slot-reserve" aria-hidden="true" />}
@@ -331,6 +346,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           personState={patchState(sibId)}
           spouseState={sibSpouse ? patchState(sibSpouse.id) : undefined}
         />
+        {bottomReserve && <div className="sibling-flap-reserve" aria-hidden="true" />}
       </div>
     )
   }
@@ -409,11 +425,12 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     )
   }
 
-  // The pre-existing flex-based rendering, used whenever any sibling flap
-  // is open anywhere in the tree. See Global Constraints in the precise-
-  // ancestor-layout plan for why: grid-based precise positioning (see
-  // renderAncestorGrid below) doesn't yet compose with sibling-flap reveal,
-  // an explicit scope decision, not an oversight.
+  // The pre-existing flex-based rendering, used whenever a sibling flap is
+  // open above depth 0 (see hasDeepFlapOpen / the branch in the main render
+  // body). A flap opened on the depth-0/root unit itself stays on
+  // renderAncestorGrid instead — see Global Constraints in the precise-
+  // ancestor-layout plan for why full composition at every depth is out of
+  // scope, an explicit scope decision, not an oversight.
   function renderFlexAncestorRows(): ReactNode {
     return visibleRows.map((row) => (
       <div className="gen" key={row.depth}>
@@ -488,6 +505,58 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     const maxVisibleDepth = visibleRows.length > 0 ? Math.max(...visibleRows.map((r) => r.depth)) : 0
     const items: ReactNode[] = []
 
+    const rootRow = visibleRows.find((r) => r.depth === 0)
+    const rootUnitForSiblings = rootRow?.units[0] ?? null
+    const rootPerson = rootUnitForSiblings ? byId.get(rootUnitForSiblings.personId) ?? null : null
+    const rootSpouse = rootUnitForSiblings?.spouseId ? byId.get(rootUnitForSiblings.spouseId) ?? null : null
+    const rootAnyMissingParent =
+      rootUnitForSiblings != null &&
+      rootPerson != null &&
+      (getParentIds(rootUnitForSiblings.personId, relationships).length === 0 ||
+        (rootSpouse != null && getParentIds(rootSpouse.id, relationships).length === 0))
+
+    // Depth-0 revealed siblings, gathered up front (person's own siblings
+    // first, then spouse's — matching renderFlexAncestorRows'
+    // addSiblingSegments order) so the couple's own boxing decision below
+    // can see every sibling's cluster label before any column renders. This
+    // also replaces the old per-sibling `openFlaps.has(...)` guard inside
+    // the append loop — that guard duplicated the two `if` checks around its
+    // call sites (an OR across both owners, scoped to neither) with dead
+    // logic; gathering here via one `collect` call per owner, each already
+    // gated on that owner's own flap, makes the same intent unambiguous.
+    const revealedSiblings: { sibId: string; sibling: Person; sibSpouse: Person | null; label: string | null }[] = []
+    if (rootUnitForSiblings) {
+      const collect = (ownerId: string) => {
+        if (!openFlaps.has(ownerId)) return
+        for (const sibId of siblingsOf(ownerId)) {
+          const sibling = byId.get(sibId)
+          if (!sibling) continue
+          const sibSpouseId = getSpouseIds(sibId, relationships)[0]
+          const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) ?? null : null
+          revealedSiblings.push({ sibId, sibling, sibSpouse, label: clusterLabel(sibling, sibSpouse) })
+        }
+      }
+      collect(rootUnitForSiblings.personId)
+      if (rootUnitForSiblings.spouseId) collect(rootUnitForSiblings.spouseId)
+    }
+
+    // The depth-0 couple's own column only gets boxed when doing so is
+    // visually warranted — mirroring renderFlexAncestorRows' `shouldGroup`
+    // rule (row.units.length > 1, always false at depth 0, OR 2+ distinct
+    // surnames among the couple's own column and its revealed siblings). A
+    // lone couple with no siblings revealed, or siblings that all share the
+    // couple's own surname, stays unboxed — same as the flex path. Each
+    // revealed sibling with its OWN determinable surname is boxed
+    // individually regardless of this couple-level decision (see the append
+    // loop below) — a simpler rule than the flex path's adjacent-run
+    // merging into one shared box, deliberately not replicated here (out of
+    // scope per the final-review finding this composes).
+    const rootLabel = rootPerson ? clusterLabel(rootPerson, rootSpouse) : null
+    const depth0DistinctLabels = new Set(
+      [rootLabel, ...revealedSiblings.map((s) => s.label)].filter((l): l is string => l !== null),
+    )
+    const depth0ShouldBoxCouple = depth0DistinctLabels.size >= 2
+
     for (const row of visibleRows) {
       const contentRow = 2 * (maxVisibleDepth - row.depth) + 1
       const connectorRow = contentRow + 1
@@ -498,12 +567,12 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
         const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
         const span = spans.get(unit.id)
         if (!span) {
-          console.warn('ancestor unit missing computed span, skipping render', unit.personId)
+          console.warn('ancestor unit missing computed span, skipping render', unit.id)
           continue
         }
 
         const label = clusterLabel(person, spouse)
-        const boxed = row.units.length > 1
+        const boxed = row.depth === 0 ? depth0ShouldBoxCouple : row.units.length > 1
 
         // Only the depth-0/root unit can ever have an open flap while still
         // being in grid mode (any flap opened on a non-root unit is exactly
@@ -541,7 +610,6 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     // `.descendants` section) is a separate concern from ancestor-to-
     // ancestor connectors above — it always exists whenever the focal
     // person has recorded children, same condition as the old code used.
-    const rootRow = visibleRows.find((r) => r.depth === 0)
     if (rootRow && focalChildren.length > 0) {
       const rootSpan = spans.get(rootRow.units[0].id)
       if (rootSpan) {
@@ -561,46 +629,30 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
     // (no ancestor lineage of their own is drawn above them, matching the
     // established rule for revealed siblings) and don't affect any span
     // computed above, since they're appended strictly after the highest
-    // column index already in use.
-    if (rootRow) {
-      const rootUnitForSiblings = rootRow.units[0]
-      const rootPerson = byId.get(rootUnitForSiblings.personId)
-      const rootSpouse = rootUnitForSiblings.spouseId ? byId.get(rootUnitForSiblings.spouseId) : null
-      const rootAnyMissingParent =
-        rootPerson != null &&
-        (getParentIds(rootUnitForSiblings.personId, relationships).length === 0 ||
-          (rootSpouse != null && getParentIds(rootSpouse.id, relationships).length === 0))
-
+    // column index already in use. Each sibling column also gets a bottom
+    // spacer (`bottomReserve`) matching the height of the focal couple's own
+    // sibling-flap row, so its Couple lands at the same vertical position as
+    // the focal couple's under the grid's bottom-alignment (align-self: end)
+    // — see .sibling-flap-reserve in global.css.
+    if (rootUnitForSiblings) {
       let nextColumn = 0
       for (const span of spans.values()) {
         if (span.end > nextColumn) nextColumn = span.end
       }
 
-      const appendSiblingColumns = (siblingIds: string[]) => {
-        for (const sibId of siblingIds) {
-          if (!openFlaps.has(rootUnitForSiblings.personId) && !(rootUnitForSiblings.spouseId && openFlaps.has(rootUnitForSiblings.spouseId))) continue
-          const sibling = byId.get(sibId)
-          if (!sibling) continue
-          const sibSpouseId = getSpouseIds(sibId, relationships)[0]
-          const sibSpouse = sibSpouseId ? byId.get(sibSpouseId) ?? null : null
-          items.push(
-            <div
-              className="ancestor-grid-item"
-              key={`sibling-${sibId}`}
-              style={{ gridColumn: `${nextColumn + 1} / ${nextColumn + 2}`, gridRow: 2 * maxVisibleDepth + 1 }}
-            >
-              {renderSiblingColumn(sibId, sibling, sibSpouse, rootAnyMissingParent)}
-            </div>,
-          )
-          nextColumn += 1
-        }
-      }
-
-      if (openFlaps.has(rootUnitForSiblings.personId)) {
-        appendSiblingColumns(siblingsOf(rootUnitForSiblings.personId))
-      }
-      if (rootUnitForSiblings.spouseId && openFlaps.has(rootUnitForSiblings.spouseId)) {
-        appendSiblingColumns(siblingsOf(rootUnitForSiblings.spouseId))
+      for (const { sibId, sibling, sibSpouse, label } of revealedSiblings) {
+        const boxed = label !== null
+        items.push(
+          <div
+            className={boxed ? 'family-cluster ancestor-grid-item' : 'ancestor-grid-item'}
+            key={`sibling-${sibId}`}
+            style={{ gridColumn: `${nextColumn + 1} / ${nextColumn + 2}`, gridRow: 2 * maxVisibleDepth + 1 }}
+          >
+            {boxed && <div className="family-cluster-label">{label}</div>}
+            {renderSiblingColumn(sibId, sibling, sibSpouse, rootAnyMissingParent, true)}
+          </div>,
+        )
+        nextColumn += 1
       }
     }
 

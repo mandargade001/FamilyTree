@@ -896,6 +896,83 @@ test('opening the focal couples own sibling flap in grid mode shows the flap its
   expect(flapButton).toHaveAttribute('aria-label', 'Hide siblings')
 })
 
+test('grid-mode revealed siblings render inside a labeled family-cluster box when they have a determinable surname', () => {
+  // Final-review Finding 1: the grid path's depth-0 sibling-flap composition
+  // (Task 4) rendered every revealed sibling as a bare .ancestor-grid-item,
+  // with no clusterLabel/boxing, unlike the flex path's
+  // groupSegmentsIntoClusters. Meera8's family shares the surname 'Sharma',
+  // so her revealed sibling Deepak8 (no spouse, so clusterLabel(sibling,
+  // null) resolves to his own last_name) must render inside a boxed,
+  // captioned .family-cluster, matching the established pattern already
+  // used for multi-lineage ancestor rows.
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    named('meera8', 'Meera8', 'Sharma'), named('anna8', 'Anna8', 'Sharma'), named('ravi8', 'Ravi8', 'Sharma'),
+    named('deepak8', 'Deepak8', 'Sharma'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'anna8', to_id: 'ravi8' },
+    { id: 'r2', type: 'parent-child', from_id: 'anna8', to_id: 'meera8' },
+    { id: 'r3', type: 'parent-child', from_id: 'ravi8', to_id: 'meera8' },
+    { id: 'r4', type: 'parent-child', from_id: 'anna8', to_id: 'deepak8' },
+    { id: 'r5', type: 'parent-child', from_id: 'ravi8', to_id: 'deepak8' },
+  ]
+  render(
+    <TreeView
+      people={clusteredPeople}
+      relationships={clusteredRelationships}
+      focalId="meera8"
+      onAddParent={() => {}}
+      onOpenProfile={() => {}}
+      onCenterOn={() => {}}
+    />,
+  )
+  fireEvent.click(screen.getByText('1')) // Meera8's sibling-flap bubble, count 1 (Deepak8)
+  expect(document.querySelector('.ancestor-grid')).not.toBeNull()
+
+  const deepakColumn = screen.getByText('Deepak8', { exact: false }).closest('.gen-column')!
+  const deepakCluster = deepakColumn.closest('.family-cluster')
+  expect(deepakCluster).not.toBeNull()
+  expect(deepakCluster!.querySelector('.family-cluster-label')).toHaveTextContent('Sharma')
+})
+
+test("a depth-0 couple with a determinable surname that differs from a revealed sibling's gets boxed too, for visual consistency", () => {
+  // Meera9's own surname ('Sharma') differs from her revealed half-sibling
+  // Kiran9's ('Verma', via Ravi9's second marriage — not modeled here, just
+  // two different surnames on siblings), so per renderFlexAncestorRows'
+  // shouldGroup rule (2+ distinct surnames in the row), the couple's own
+  // column should also render boxed — not just the sibling's.
+  const named = (id: string, first: string, last: string) => ({ ...person(id, first), last_name: last })
+  const clusteredPeople = [
+    named('meera9', 'Meera9', 'Sharma'), named('anna9', 'Anna9', 'Sharma'), named('ravi9', 'Ravi9', 'Sharma'),
+    named('kiran9', 'Kiran9', 'Verma'),
+  ]
+  const clusteredRelationships: Relationship[] = [
+    { id: 'r1', type: 'spouse', from_id: 'anna9', to_id: 'ravi9' },
+    { id: 'r2', type: 'parent-child', from_id: 'anna9', to_id: 'meera9' },
+    { id: 'r3', type: 'parent-child', from_id: 'ravi9', to_id: 'meera9' },
+    { id: 'r4', type: 'parent-child', from_id: 'anna9', to_id: 'kiran9' },
+    { id: 'r5', type: 'parent-child', from_id: 'ravi9', to_id: 'kiran9' },
+  ]
+  render(
+    <TreeView
+      people={clusteredPeople}
+      relationships={clusteredRelationships}
+      focalId="meera9"
+      onAddParent={() => {}}
+      onOpenProfile={() => {}}
+      onCenterOn={() => {}}
+    />,
+  )
+  fireEvent.click(screen.getByText('1')) // Meera9's sibling-flap bubble, count 1 (Kiran9)
+
+  const meeraColumn = screen.getByText('Meera9', { exact: false }).closest('.gen-column')!
+  expect(meeraColumn.closest('.family-cluster')).not.toBeNull()
+  const kiranColumn = screen.getByText('Kiran9', { exact: false }).closest('.gen-column')!
+  expect(kiranColumn.closest('.family-cluster')).not.toBeNull()
+  expect(meeraColumn.closest('.family-cluster')).not.toBe(kiranColumn.closest('.family-cluster'))
+})
+
 test('opening a deeper-generation sibling flap still falls back to flex rendering', () => {
   const deepPeople = [
     person('focal', 'Focal'), person('parent1', 'Parent'), person('parentSib', 'ParentSibling'), person('grandparent', 'Grand'),

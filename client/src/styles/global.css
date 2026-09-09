@@ -117,6 +117,14 @@ textarea.field { height: 74px; padding-top: 9px; resize: vertical; }
    `.gen` row when the owner has one and the sibling (which never does)
    doesn't. Keep this height in sync with `.add-parent-slot`'s box. */
 .sibling-slot-reserve { min-height: 56px; }
+/* Grid-path equivalent of .sibling-slot-reserve, for the opposite edge.
+   Under .ancestor-grid-item's align-self: end (bottom-alignment), the focal
+   couple's own column ends with its sibling-flap row (a .sibling-bubble,
+   24px, plus .gen-column's gap: var(--space-sm), 8px) below its Couple, but
+   a revealed sibling column (which never shows a flap for its own further
+   siblings) ends right after its Couple — bottom-aligned, the sibling's
+   Couple would sit ~32px lower than the focal couple's without this. */
+.sibling-flap-reserve { min-height: 32px; }
 
 .gate-shell { max-width: 320px; margin: 44px auto; text-align: center; }
 .gate-icon { width: 44px; height: 44px; border-radius: 50%; margin: 0 auto 18px; background: var(--thread-soft); border: 1.5px solid var(--thread); color: var(--thread); display: flex; align-items: center; justify-content: center; }

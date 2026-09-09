@@ -42,7 +42,7 @@ export function computeAncestorLayout(rows: AncestorRow[]): Map<string, ColumnSp
     if (row.depth > maxDepth) maxDepth = row.depth
   }
 
-  // Pass 1: bottom-up required width, keyed by unit.personId.
+  // Pass 1: bottom-up required width, keyed by unit.id.
   const requiredWidth = new Map<string, number>()
   const unitByChildId = new Map<number, Map<string, AncestorUnit[]>>()
 

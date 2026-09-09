@@ -64,7 +64,7 @@ export interface AncestorRow {
 }
 
 export function buildAncestorRows(focalId: string, relationships: Relationship[]): AncestorRow[] {
-  const rows: AncestorRow[] = [{ depth: 0, units: [{ id: '0:root:' + focalId, personId: focalId, spouseId: getSpouseIds(focalId, relationships)[0] ?? null, childId: null }] }]
+  const rows: AncestorRow[] = [{ depth: 0, units: [{ id: `0:root:${focalId}`, personId: focalId, spouseId: getSpouseIds(focalId, relationships)[0] ?? null, childId: null }] }]
 
   let currentIds = [focalId]
   let depth = 0
