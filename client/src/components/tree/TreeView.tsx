@@ -452,7 +452,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           const shouldGroup = row.units.length > 1 || distinctLabels.size >= 2
 
           return (
-            <Fragment key={unit.personId}>
+            <Fragment key={unit.id}>
               {shouldGroup
                 ? groupSegmentsIntoClusters(segments, row.units.length > 1)
                 : segments.map((s) => <Fragment key={s.id}>{s.node}</Fragment>)}
@@ -482,7 +482,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
         const person = byId.get(unit.personId)
         if (!person) continue
         const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
-        const span = spans.get(unit.personId)
+        const span = spans.get(unit.id)
         if (!span) {
           console.warn('ancestor unit missing computed span, skipping render', unit.personId)
           continue
@@ -496,7 +496,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
         items.push(
           <div
             className={boxed ? 'family-cluster ancestor-grid-item' : 'ancestor-grid-item'}
-            key={`content-${unit.personId}`}
+            key={`content-${unit.id}`}
             style={{ gridColumn: `${span.start + 1} / ${span.end + 1}`, gridRow: contentRow }}
           >
             {boxed && label && <div className="family-cluster-label">{label}</div>}
@@ -508,7 +508,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
           items.push(
             <div
               className="seam seam-parent-child ancestor-grid-connector"
-              key={`connector-${unit.personId}`}
+              key={`connector-${unit.id}`}
               style={{ gridColumn: `${span.start + 1} / ${span.end + 1}`, gridRow: connectorRow }}
             />,
           )

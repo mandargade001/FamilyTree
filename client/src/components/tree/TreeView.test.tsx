@@ -816,3 +816,27 @@ test('a parent does not vanish from the grid when two co-parents have no recorde
   expect(screen.getByText('Dad')).toBeInTheDocument()
   expect(screen.getByText('Mom')).toBeInTheDocument()
 })
+
+test('grid mode renders both ancestor units when two share a personId (pedigree collapse)', () => {
+  // Kunal's two parents (ila, om, no recorded spouse edge between them)
+  // share one grandparent, grandma, reachable via both of them at depth 2.
+  const cousinPeople = [person('kunal', 'Kunal'), person('ila', 'Ila'), person('om', 'Om'), person('grandma', 'Grandma')]
+  const cousinRelationships: Relationship[] = [
+    { id: 'r1', type: 'parent-child', from_id: 'ila', to_id: 'kunal' },
+    { id: 'r2', type: 'parent-child', from_id: 'om', to_id: 'kunal' },
+    { id: 'r3', type: 'parent-child', from_id: 'grandma', to_id: 'ila' },
+    { id: 'r4', type: 'parent-child', from_id: 'grandma', to_id: 'om' },
+  ]
+  render(
+    <TreeView
+      people={cousinPeople}
+      relationships={cousinRelationships}
+      focalId="kunal"
+      onAddParent={() => {}}
+      onOpenProfile={() => {}}
+      onCenterOn={() => {}}
+    />,
+  )
+  fireEvent.click(screen.getByText('Show more ancestors'))
+  expect(screen.getAllByText('Grandma').length).toBe(2)
+})
