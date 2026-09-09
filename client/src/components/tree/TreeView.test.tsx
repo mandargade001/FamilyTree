@@ -820,6 +820,15 @@ test('a parent does not vanish from the grid when two co-parents have no recorde
 test('grid mode renders both ancestor units when two share a personId (pedigree collapse)', () => {
   // Kunal's two parents (ila, om, no recorded spouse edge between them)
   // share one grandparent, grandma, reachable via both of them at depth 2.
+  // Before the personId -> id rekey (fc33e63), computeAncestorLayout's
+  // spans map and TreeView's React keys were keyed by unit.personId, so the
+  // two grandma units collided on both the layout span and the React key —
+  // React would emit a "two children with the same key" console.error even
+  // though both DOM nodes still render (React doesn't drop elements for a
+  // colliding key on a fresh mount, only warns). The getAllByText assertion
+  // below is therefore not a real regression guard by itself; the
+  // console.error spy is the assertion that actually discriminates the bug.
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   const cousinPeople = [person('kunal', 'Kunal'), person('ila', 'Ila'), person('om', 'Om'), person('grandma', 'Grandma')]
   const cousinRelationships: Relationship[] = [
     { id: 'r1', type: 'parent-child', from_id: 'ila', to_id: 'kunal' },
@@ -839,4 +848,9 @@ test('grid mode renders both ancestor units when two share a personId (pedigree 
   )
   fireEvent.click(screen.getByText('Show more ancestors'))
   expect(screen.getAllByText('Grandma').length).toBe(2)
+  const duplicateKeyWarning = errorSpy.mock.calls.find((call) =>
+    call.some((arg) => typeof arg === 'string' && /same key|duplicate key/i.test(arg)),
+  )
+  expect(duplicateKeyWarning).toBeUndefined()
+  errorSpy.mockRestore()
 })
