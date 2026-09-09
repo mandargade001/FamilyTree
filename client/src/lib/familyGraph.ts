@@ -52,6 +52,7 @@ export function computeImmediateFamily(personId: string, relationships: Relation
 }
 
 export interface AncestorUnit {
+  id: string
   personId: string
   spouseId: string | null
   childId: string | null
@@ -63,23 +64,23 @@ export interface AncestorRow {
 }
 
 export function buildAncestorRows(focalId: string, relationships: Relationship[]): AncestorRow[] {
-  const rows: AncestorRow[] = [{ depth: 0, units: [{ personId: focalId, spouseId: getSpouseIds(focalId, relationships)[0] ?? null, childId: null }] }]
+  const rows: AncestorRow[] = [{ depth: 0, units: [{ id: '0:root:' + focalId, personId: focalId, spouseId: getSpouseIds(focalId, relationships)[0] ?? null, childId: null }] }]
 
   let currentIds = [focalId]
   let depth = 0
 
   while (currentIds.length > 0) {
     depth += 1
-    const seenParentIds = new Set<string>()
     const units: AncestorUnit[] = []
 
     for (const id of currentIds) {
+      const seenParentIds = new Set<string>()
       for (const parentId of getParentIds(id, relationships)) {
         if (seenParentIds.has(parentId)) continue
         const spouseId = getSpouseIds(parentId, relationships)[0] ?? null
         if (spouseId) seenParentIds.add(spouseId)
         seenParentIds.add(parentId)
-        units.push({ personId: parentId, spouseId, childId: id })
+        units.push({ id: `${depth}:${id}:${parentId}`, personId: parentId, spouseId, childId: id })
       }
     }
 

@@ -63,14 +63,14 @@ test('computeImmediateFamily handles someone with no spouse and no siblings', ()
 
 test('buildAncestorRows returns the focal person alone at depth 0', () => {
   const rows = buildAncestorRows('meera', relationships)
-  expect(rows[0]).toEqual({ depth: 0, units: [{ personId: 'meera', spouseId: null, childId: null }] })
+  expect(rows[0]).toEqual({ depth: 0, units: [{ id: '0:root:meera', personId: 'meera', spouseId: null, childId: null }] })
 })
 
 test('buildAncestorRows walks up through recorded parent couples', () => {
   const rows = buildAncestorRows('meera', relationships)
   // depth 1: Meera's parents, Anna & Ravi, as one couple unit
   const depth1 = rows.find((r) => r.depth === 1)!
-  expect(depth1.units).toEqual([{ personId: 'anna', spouseId: 'ravi', childId: 'meera' }])
+  expect(depth1.units).toEqual([{ id: '1:meera:anna', personId: 'anna', spouseId: 'ravi', childId: 'meera' }])
 })
 
 test('buildAncestorRows stops at a generation with no recorded parents', () => {
@@ -85,7 +85,64 @@ test('buildAncestorRows handles someone with only one recorded parent', () => {
   ]
   const rows = buildAncestorRows('solo-child', oneParent)
   const depth1 = rows.find((r) => r.depth === 1)!
-  expect(depth1.units).toEqual([{ personId: 'solo-parent', spouseId: null, childId: 'solo-child' }])
+  expect(depth1.units).toEqual([{ id: '1:solo-child:solo-parent', personId: 'solo-parent', spouseId: null, childId: 'solo-child' }])
+})
+
+test('buildAncestorRows keeps a shared ancestor reachable via two different lineages at the same depth', () => {
+  // Priya and a second person, Kunal, are first cousins: both are children
+  // of siblings Ila and Om, who share a parent, Grandma. Priya's parent is
+  // Ila; Kunal's parent is Om; Ila and Om's shared parent is Grandma —
+  // a pedigree collapse one generation further up from Priya and Kunal.
+  const cousinRelationships: Relationship[] = [
+    { id: 'c1', type: 'parent-child', from_id: 'grandma', to_id: 'ila' },
+    { id: 'c2', type: 'parent-child', from_id: 'grandma', to_id: 'om' },
+    { id: 'c3', type: 'parent-child', from_id: 'ila', to_id: 'priya' },
+    { id: 'c4', type: 'parent-child', from_id: 'om', to_id: 'kunal' },
+    { id: 'c5', type: 'parent-child', from_id: 'ila', to_id: 'kunal' },
+  ]
+  // Kunal's recorded parents are Om and Ila (both), so at depth 1 from
+  // Kunal's own focal view the currentIds become [ila, om] (via the
+  // depth-1 units' personId/spouseId). At depth 2, both ila's and om's
+  // searches reach 'grandma' — the pedigree collapse this test targets.
+  const rows = buildAncestorRows('kunal', cousinRelationships)
+  const depth2 = rows.find((r) => r.depth === 2)!
+  // grandma must appear as a depth-2 parent for BOTH ila and om, not be
+  // dropped for the second one processed.
+  const grandmaUnits = depth2.units.filter((u) => u.personId === 'grandma')
+  expect(grandmaUnits.length).toBe(2)
+  expect(grandmaUnits.map((u) => u.childId).sort()).toEqual(['ila', 'om'])
+})
+
+test('buildAncestorRows still merges one persons own two parents into a single unit', () => {
+  // Regression guard: the seenParentIds fix must not reintroduce two
+  // separate units for one recorded couple.
+  const rows = buildAncestorRows('meera', relationships)
+  const depth1 = rows.find((r) => r.depth === 1)!
+  expect(depth1.units.length).toBe(1)
+  expect(depth1.units[0]).toMatchObject({ personId: 'anna', spouseId: 'ravi', childId: 'meera' })
+})
+
+test('buildAncestorRows assigns each unit a stable id unique per occurrence', () => {
+  const rows = buildAncestorRows('meera', relationships)
+  expect(rows[0].units[0].id).toBe('0:root:meera')
+  const depth1 = rows.find((r) => r.depth === 1)!
+  expect(depth1.units[0].id).toBe('1:meera:anna')
+})
+
+test('buildAncestorRows gives two units sharing a personId distinct ids', () => {
+  const cousinRelationships: Relationship[] = [
+    { id: 'c1', type: 'parent-child', from_id: 'grandma', to_id: 'ila' },
+    { id: 'c2', type: 'parent-child', from_id: 'grandma', to_id: 'om' },
+    { id: 'c3', type: 'parent-child', from_id: 'ila', to_id: 'priya' },
+    { id: 'c4', type: 'parent-child', from_id: 'om', to_id: 'kunal' },
+    { id: 'c5', type: 'parent-child', from_id: 'ila', to_id: 'kunal' },
+  ]
+  const rows = buildAncestorRows('kunal', cousinRelationships)
+  const depth2 = rows.find((r) => r.depth === 2)!
+  const grandmaUnits = depth2.units.filter((u) => u.personId === 'grandma')
+  const ids = grandmaUnits.map((u) => u.id)
+  expect(new Set(ids).size).toBe(2)
+  expect(ids.sort()).toEqual(['2:ila:grandma', '2:om:grandma'])
 })
 
 test('getDescendantIds returns only direct children, not grandchildren', () => {
