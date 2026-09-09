@@ -437,7 +437,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
         {row.units.map((unit) => {
           const person = byId.get(unit.personId)
           if (!person) return null
-          const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
+          const spouse = unit.spouseId ? byId.get(unit.spouseId) ?? null : null
 
           const personHasParents = getParentIds(unit.personId, relationships).length > 0
           const spouseHasParents = spouse ? getParentIds(spouse.id, relationships).length > 0 : true
@@ -564,7 +564,7 @@ export function TreeView({ people, relationships, focalId, onAddParent, onOpenPr
       for (const unit of row.units) {
         const person = byId.get(unit.personId)
         if (!person) continue
-        const spouse = unit.spouseId ? byId.get(unit.spouseId) : null
+        const spouse = unit.spouseId ? byId.get(unit.spouseId) ?? null : null
         const span = spans.get(unit.id)
         if (!span) {
           console.warn('ancestor unit missing computed span, skipping render', unit.id)

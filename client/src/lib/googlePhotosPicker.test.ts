@@ -2,7 +2,7 @@ import { pickGooglePhoto } from './googlePhotosPicker'
 
 vi.mock('./googleAuth', () => ({ requestGoogleAccessToken: vi.fn().mockResolvedValue('test-token') }))
 
-const originalFetch = global.fetch
+const originalFetch = globalThis.fetch
 const originalOpen = window.open
 
 function makeFakePopup(): Window {
@@ -15,14 +15,14 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  global.fetch = originalFetch
+  globalThis.fetch = originalFetch
   window.open = originalOpen
   vi.useRealTimers()
 })
 
 test('drives the full flow and resolves with the picked photo as a File', async () => {
   const calls: unknown[] = []
-  global.fetch = vi.fn(async (_url, opts) => {
+  globalThis.fetch = vi.fn(async (_url, opts) => {
     const body = opts?.body ? JSON.parse(opts.body as string) : null
     calls.push(body)
     if (body?.action === 'create') {
@@ -59,7 +59,7 @@ test('drives the full flow and resolves with the picked photo as a File', async 
 })
 
 test('resolves null if the session times out without a photo being picked', async () => {
-  global.fetch = vi.fn(async (_url, opts) => {
+  globalThis.fetch = vi.fn(async (_url, opts) => {
     const body = opts?.body ? JSON.parse(opts.body as string) : null
     if (body?.action === 'create') {
       return new Response(JSON.stringify({
@@ -84,7 +84,7 @@ test('resolves null if the session times out without a photo being picked', asyn
 })
 
 test('rejects with a descriptive error when create fails, without polling', async () => {
-  global.fetch = vi.fn(async (_url, opts) => {
+  globalThis.fetch = vi.fn(async (_url, opts) => {
     const body = opts?.body ? JSON.parse(opts.body as string) : null
     if (body?.action === 'create') {
       return new Response(JSON.stringify({ error: 'missing Google Authorization header' }), { status: 401 })
@@ -99,15 +99,15 @@ test('rejects with a clear error when window.open is blocked by the browser, wit
   window.open = vi.fn(() => null)
   const { requestGoogleAccessToken } = await import('./googleAuth')
   vi.mocked(requestGoogleAccessToken).mockClear()
-  global.fetch = vi.fn()
+  globalThis.fetch = vi.fn()
 
   await expect(pickGooglePhoto()).rejects.toThrow(/popup/i)
   expect(requestGoogleAccessToken).not.toHaveBeenCalled()
-  expect(global.fetch).not.toHaveBeenCalled()
+  expect(globalThis.fetch).not.toHaveBeenCalled()
 })
 
 test('rejects with a descriptive error when download fails instead of returning a corrupt File', async () => {
-  global.fetch = vi.fn(async (_url, opts) => {
+  globalThis.fetch = vi.fn(async (_url, opts) => {
     const body = opts?.body ? JSON.parse(opts.body as string) : null
     if (body?.action === 'create') {
       return new Response(JSON.stringify({
